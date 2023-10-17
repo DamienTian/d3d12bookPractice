@@ -175,7 +175,8 @@ void D3DApp::OnResize()
 	}
 
 	// = =  = =  = =  = =  = =  = =  = =  = =  = =  = =  = = 
-	// The following code example shows how we create the depth / stencil texture and its corresponding depth / stencil view
+	// The following code example shows how we create the depth / stencil texture 
+	// and its corresponding depth / stencil view
 
     // Create the depth/stencil buffer and view.
     D3D12_RESOURCE_DESC depthStencilDesc;
