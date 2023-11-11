@@ -11,7 +11,11 @@ cbuffer cbPerObject : register(b0)
 
 struct VertexIn
 {
-	float3 PosL  : POSITION;
+    float3 PosL : POSITION;
+    //float3 Tangent : TANGENT;
+    //float3 Normal : NORMAL;
+    //float2 Tex0 : TEX0;
+    //float2 Tex1 : TEX1;
     float4 Color : COLOR;
 };
 

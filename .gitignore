@@ -1,18 +1,5 @@
-*
-!.gitattributes
-!.gitignore
-!readme.md
-!.gitkeep
-!*.cpp
-!*.hpp
-!*.h
-!*.hlsl
-!*.sln
-!*.suo
-!*.vcxproj
-!*.vcxproj.filters
-!*.txt
-!*.m3d
-!*.bmp
-!*.dds
-!*/
+*.tlog
+*.pdb
+*.exe
+*.vsidx
+Chapter 4 Direct3D Initialization/Init Direct3D/x64/Debug/Init Direct3D.vcxproj.FileListAbsolute.txt
