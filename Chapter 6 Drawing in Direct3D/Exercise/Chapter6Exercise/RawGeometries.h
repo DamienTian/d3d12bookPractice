@@ -4,29 +4,29 @@
 using namespace DirectX;
 using namespace DirectX::PackedVector;
 
-//struct Vertex
-//{
-//    XMFLOAT3 Pos;
-//    XMFLOAT4 Color;
-//};
-
-// Ex 1
 struct Vertex
 {
-	XMFLOAT3 Pos;
-	XMFLOAT3 Tangent;
-	XMFLOAT3 Normal;
-	XMFLOAT2 Tex0;
-	XMFLOAT2 Tex1;
-	XMFLOAT4 Color; // XMCOLOR Color; in Ex 1 will cause color info lost, which makes the box not render correctlly
-
-	Vertex(XMFLOAT3 pos, XMFLOAT4 color) : Pos(pos), Color(color) {
-		Tangent = XMFLOAT3(0.0f, 0.0f, 0.0f);
-		Normal = XMFLOAT3(0.0f, 0.0f, 0.0f);
-		Tex0 = XMFLOAT2(0.0f, 0.0f);
-		Tex1 = XMFLOAT2(0.0f, 0.0f);
-	}
+    XMFLOAT3 Pos;
+    XMFLOAT4 Color;
 };
+
+// Ex 1
+//struct Vertex
+//{
+//	XMFLOAT3 Pos;
+//	XMFLOAT3 Tangent;
+//	XMFLOAT3 Normal;
+//	XMFLOAT2 Tex0;
+//	XMFLOAT2 Tex1;
+//	XMFLOAT4 Color; // XMCOLOR Color; in Ex 1 will cause color info lost, which makes the box not render correctlly
+//
+//	Vertex(XMFLOAT3 pos, XMFLOAT4 color) : Pos(pos), Color(color) {
+//		Tangent = XMFLOAT3(0.0f, 0.0f, 0.0f);
+//		Normal = XMFLOAT3(0.0f, 0.0f, 0.0f);
+//		Tex0 = XMFLOAT2(0.0f, 0.0f);
+//		Tex1 = XMFLOAT2(0.0f, 0.0f);
+//	}
+//};
 
 // Ex 2
 struct VPosData
@@ -38,20 +38,49 @@ struct VColorData
 	XMFLOAT4 Color;
 };
 
-Vertex v1(XMFLOAT3(-1.0f, -1.0f, -1.0f), XMFLOAT4(Colors::White));
-Vertex v2(XMFLOAT3(-1.0f, +1.0f, -1.0f), XMFLOAT4(Colors::Black));
-Vertex v3(XMFLOAT3(+1.0f, +1.0f, -1.0f), XMFLOAT4(Colors::Red));
-Vertex v4(XMFLOAT3(+1.0f, -1.0f, -1.0f), XMFLOAT4(Colors::Green));
-Vertex v5(XMFLOAT3(-1.0f, -1.0f, +1.0f), XMFLOAT4(Colors::Blue));
-Vertex v6(XMFLOAT3(-1.0f, +1.0f, +1.0f), XMFLOAT4(Colors::Yellow));
-Vertex v7(XMFLOAT3(+1.0f, +1.0f, +1.0f), XMFLOAT4(Colors::Cyan));
-Vertex v8(XMFLOAT3(+1.0f, -1.0f, +1.0f), XMFLOAT4(Colors::Magenta));
+// Ex 10
+//struct Vertex 
+//{
+//	XMFLOAT3 Pos;
+//	XMCOLOR Color;
+//};
 
-std::array<Vertex, 8> vEx1 = { v1, v2, v3, v4, v5, v6, v7, v8 };
+Vertex v1({ XMFLOAT3(-1.0f, -1.0f, -1.0f), XMFLOAT4(Colors::White) });
+Vertex v2({ XMFLOAT3(-1.0f, +1.0f, -1.0f), XMFLOAT4(Colors::Black) });
+Vertex v3({ XMFLOAT3(+1.0f, +1.0f, -1.0f), XMFLOAT4(Colors::Red) });
+Vertex v4({ XMFLOAT3(+1.0f, -1.0f, -1.0f), XMFLOAT4(Colors::Green) });
+Vertex v5({ XMFLOAT3(-1.0f, -1.0f, +1.0f), XMFLOAT4(Colors::Blue) });
+Vertex v6({ XMFLOAT3(-1.0f, +1.0f, +1.0f), XMFLOAT4(Colors::Yellow) });
+Vertex v7({ XMFLOAT3(+1.0f, +1.0f, +1.0f), XMFLOAT4(Colors::Cyan) });
+Vertex v8({ XMFLOAT3(+1.0f, -1.0f, +1.0f), XMFLOAT4(Colors::Magenta) });
+
+//Vertex v1({ XMFLOAT3(-1.0f, -1.0f, -1.0f), XMCOLOR(Colors::White) });
+//Vertex v2({ XMFLOAT3(-1.0f, +1.0f, -1.0f), XMCOLOR(Colors::Black) });
+//Vertex v3({ XMFLOAT3(+1.0f, +1.0f, -1.0f), XMCOLOR(Colors::Red) });
+//Vertex v4({ XMFLOAT3(+1.0f, -1.0f, -1.0f), XMCOLOR(Colors::Green) });
+//Vertex v5({ XMFLOAT3(-1.0f, -1.0f, +1.0f), XMCOLOR(Colors::Blue) });
+//Vertex v6({ XMFLOAT3(-1.0f, +1.0f, +1.0f), XMCOLOR(Colors::Yellow) });
+//Vertex v7({ XMFLOAT3(+1.0f, +1.0f, +1.0f), XMCOLOR(Colors::Cyan) });
+//Vertex v8({ XMFLOAT3(+1.0f, -1.0f, +1.0f), XMCOLOR(Colors::Magenta) });
+
+Vertex v9({ XMFLOAT3(+1.0f, +0.0f, -1.0f), XMFLOAT4(Colors::Green) });
+Vertex v10({ XMFLOAT3(-1.0f, +0.0f, -1.0f), XMFLOAT4(Colors::Green) });
+Vertex v11({ XMFLOAT3(+1.0f, +0.0f, +1.0f), XMFLOAT4(Colors::Green) });
+Vertex v12({ XMFLOAT3(-1.0f, +0.0f, +1.0f), XMFLOAT4(Colors::Green) });
+Vertex v13({ XMFLOAT3(+0.0f, sqrtf(2), +0.0f), XMFLOAT4(Colors::Red) });
+
+//Vertex v9({ XMFLOAT3(+1.0f, +0.0f, -1.0f), XMCOLOR(Colors::Green) });
+//Vertex v10({ XMFLOAT3(-1.0f, +0.0f, -1.0f), XMCOLOR(Colors::Green) });
+//Vertex v11({ XMFLOAT3(+1.0f, +0.0f, +1.0f), XMCOLOR(Colors::Green) });
+//Vertex v12({ XMFLOAT3(-1.0f, +0.0f, +1.0f), XMCOLOR(Colors::Green) });
+//Vertex v13({ XMFLOAT3(+0.0f, sqrtf(2), +0.0f), XMCOLOR(Colors::Red) });
+
+std::vector<Vertex> vBox = { v1, v2, v3, v4, v5, v6, v7, v8 };
+std::vector<Vertex> vPyramid = { v9, v10, v11, v12, v13 };
 
 struct Box
 {
-	std::array<Vertex, 8> vertices = vEx1;
+	std::vector<Vertex> vertices = vBox;
 
 	// Ex 1 COMMENT OUT
 	//{
@@ -65,6 +94,7 @@ struct Box
 		//Vertex({ XMFLOAT3(+1.0f, -1.0f, +1.0f), XMFLOAT4(Colors::Magenta) })
 	//};
 
+	// Ex 2
 	std::vector<VPosData> vps =
 	{
 		VPosData({XMFLOAT3(-1.0f, -1.0f, -1.0f)}),
@@ -76,7 +106,6 @@ struct Box
 		VPosData({XMFLOAT3(+1.0f, +1.0f, +1.0f)}),
 		VPosData({XMFLOAT3(+1.0f, -1.0f, +1.0f)})
 	};
-
 	std::vector<VColorData> vcs =
 	{
 		VColorData({XMFLOAT4(Colors::White)}),
@@ -107,7 +136,9 @@ struct Box
 };
 
 struct Pyramid {
+	std::vector<Vertex> vertices = vPyramid;
 
+	// Ex 2
 	std::vector<VPosData> vps = {
 		VPosData({XMFLOAT3(+1.0f, +0.0f, -1.0f)}),		// 0
 		VPosData({XMFLOAT3(-1.0f, +0.0f, -1.0f)}),		// 1
@@ -115,7 +146,6 @@ struct Pyramid {
 		VPosData({XMFLOAT3(-1.0f, +0.0f, +1.0f)}),		// 3
 		VPosData({XMFLOAT3(+0.0f, sqrtf(2), +0.0f)})	// 4
 	};
-
 	std::vector<VColorData> vcs =
 	{
 		VColorData({XMFLOAT4(Colors::Green)}),	// 0 

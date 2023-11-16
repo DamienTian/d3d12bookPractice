@@ -237,14 +237,23 @@ void D3DApp::OnResize()
 	FlushCommandQueue();
 
 	// Update the viewport transform to cover the client area.
-	mScreenViewport.TopLeftX = 0;
+	// Ex 12 ref: https://zhuanlan.zhihu.com/p/141972167
+	/*	
+		Ex 12 Explaination: the obj was drawn at the center of the view port, which is:
+			(static_cast<float>(mClientWidth) - 0) / 2
+		(0 is the Top Left corner)
+		In order to move obj to the left half of the back buffer, we need to the virepoint center by -((static_cast<float>(mClientWidth) - 0) / 4)
+	*/  
+	mScreenViewport.TopLeftX = 0; //-(static_cast<float>(mClientWidth) / 4); // Ex 12
 	mScreenViewport.TopLeftY = 0;
-	mScreenViewport.Width    = static_cast<float>(mClientWidth);
+	mScreenViewport.Width    = static_cast<float>(mClientWidth); // Ex 12
 	mScreenViewport.Height   = static_cast<float>(mClientHeight);
 	mScreenViewport.MinDepth = 0.0f;
 	mScreenViewport.MaxDepth = 1.0f;
 
     mScissorRect = { 0, 0, mClientWidth, mClientHeight };
+	// Ex 13
+    //mScissorRect = { mClientWidth/4, mClientHeight/4, 3 * mClientWidth/4, 3 * mClientHeight/4 };
 }
  
 LRESULT D3DApp::MsgProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)

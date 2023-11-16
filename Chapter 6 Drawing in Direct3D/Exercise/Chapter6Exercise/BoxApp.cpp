@@ -20,6 +20,7 @@ using Microsoft::WRL::ComPtr;
 struct ObjectConstants
 {
     XMFLOAT4X4 WorldViewProj = MathHelper::Identity4x4();
+    XMFLOAT4 PulseColor = XMFLOAT4(Colors::Gold);   // Ex 16
     float GamerTotalTime = 0.0f;
 };
 
@@ -199,11 +200,10 @@ void BoxApp::Draw(const GameTimer& gt)
 
 	mCommandList->SetGraphicsRootSignature(mRootSignature.Get());
 
-    // Ex 2 COMMENT OUT
-	//mCommandList->IASetVertexBuffers(0, 1, &mBoxGeo->VertexBufferView());
+	mCommandList->IASetVertexBuffers(0, 1, &mBoxGeo->VertexBufferView());
     // Ex 2
-	mCommandList->IASetVertexBuffers(0, 1, &mBoxGeo->VertexPosBufferView());
-	mCommandList->IASetVertexBuffers(1, 1, &mBoxGeo->VertexColorBufferView());
+	/*mCommandList->IASetVertexBuffers(0, 1, &mBoxGeo->VertexPosBufferView());
+	mCommandList->IASetVertexBuffers(1, 1, &mBoxGeo->VertexColorBufferView());*/
 
 	mCommandList->IASetIndexBuffer(&mBoxGeo->IndexBufferView());
     mCommandList->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
@@ -374,7 +374,8 @@ void BoxApp::BuildShadersAndInputLayout()
     //mInputLayout =
     //{
     //    { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-    //    { "COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
+    //    { "COLOR", 0, DXGI_FORMAT_B8G8R8A8_UNORM, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 } // Ex 10
+    //    //{ "COLOR", 0, DXGI_FORMAT_R8G8B8A8_UNORM, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 } // this will reverse color orders
     //};
     
     // Ex 1
@@ -389,10 +390,18 @@ void BoxApp::BuildShadersAndInputLayout()
     };*/
 
     // Ex 2
-    mInputLayout = 
+    //mInputLayout = 
+    //{
+    //    {"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
+    //    {"COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 1, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0}
+    //};
+
+    // Ex 11 (a)
+    // Explaination: This still works is because the AlignedByteOffset is setup correctly (Color offset for 12 bytes)
+    mInputLayout =
     {
-        {"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
-        {"COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 1, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0}
+        {"COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+        {"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
     };
 }
 
@@ -403,17 +412,23 @@ void BoxApp::BuildBoxGeometry()
     // Ex 4
     Pyramid pyramid;
 
-    // Ex 2 (COMMENT OUT for Ex 4)
-    std::vector<VPosData> verticesPosBox = box.vps;
-    std::vector<VColorData> verticesColorBox = box.vcs;
+    std::vector<Vertex> verticesBox = box.vertices;
+    std::vector<Vertex> verticesPyramid = pyramid.vertices;
+    // Ex 7
+    std::vector<Vertex> vertices = verticesBox;
+    vertices.insert(vertices.end(), verticesPyramid.begin(), verticesPyramid.end());
+
+    // Ex 2 & Ex 4
+    //std::vector<VPosData> verticesPosBox = box.vps;
+    //std::vector<VColorData> verticesColorBox = box.vcs;
     // Ex 4 & Ex 7
-    std::vector<VPosData> verticesPosPyramid = pyramid.vps;
-    std::vector<VColorData> verticesColorPyramid = pyramid.vcs;
-    // Ex 7: merge vertices' data together
-    std::vector<VPosData> verticesPos = verticesPosBox;
-    verticesPos.insert(verticesPos.end(), verticesPosPyramid.begin(), verticesPosPyramid.end());
-    std::vector<VColorData> verticesColor = verticesColorBox;
-    verticesColor.insert(verticesColor.end(), verticesColorPyramid.begin(), verticesColorPyramid.end());
+    //std::vector<VPosData> verticesPosPyramid = pyramid.vps;
+    //std::vector<VColorData> verticesColorPyramid = pyramid.vcs;
+    // Ex 2 & Ex 7: merge vertices' data together with Ex 2's duo pipelines
+    //std::vector<VPosData> verticesPos = verticesPosBox;
+    //verticesPos.insert(verticesPos.end(), verticesPosPyramid.begin(), verticesPosPyramid.end());
+    //std::vector<VColorData> verticesColor = verticesColorBox;
+    //verticesColor.insert(verticesColor.end(), verticesColorPyramid.begin(), verticesColorPyramid.end());
     // Ex 2 COMMENT OUT
     //std::array<Vertex, 8> vertices = box.vertices;
     // Ex 7
@@ -425,16 +440,18 @@ void BoxApp::BuildBoxGeometry()
     // Ex 2 COMMENT OUT
     //const UINT vbByteSize = (UINT)vertices.size() * sizeof(Vertex);
     // Ex 2 & Ex 7
-    const UINT vbPosByteSize = (UINT)verticesPos.size() * sizeof(VPosData);
-    const UINT vbColorByteSize = (UINT)verticesColor.size() * sizeof(VColorData);
+    //const UINT vbPosByteSize = (UINT)verticesPos.size() * sizeof(VPosData);
+    //const UINT vbColorByteSize = (UINT)verticesColor.size() * sizeof(VColorData);
+
+    const UINT vbByteSize = (UINT)vertices.size() * sizeof(Vertex);
     const UINT ibByteSize = (UINT)indices.size() * sizeof(std::uint16_t);
 
 	mBoxGeo = std::make_unique<MeshGeometry>();
 	mBoxGeo->Name = "boxGeo";
 
-    // Ex 2 COMMENT OUT
-	//ThrowIfFailed(D3DCreateBlob(vbByteSize, &mBoxGeo->VertexBufferCPU));
-    //CopyMemory(mBoxGeo->VertexBufferCPU->GetBufferPointer(), vertices.data(), vbByteSize);
+	ThrowIfFailed(D3DCreateBlob(vbByteSize, &mBoxGeo->VertexBufferCPU));
+    CopyMemory(mBoxGeo->VertexBufferCPU->GetBufferPointer(), vertices.data(), vbByteSize);
+
     // Ex 7 (COMMENT OUT Ex 2)
     //ThrowIfFailed(D3DCreateBlob(vbPosBoxByteSize, &mBoxGeo->VertexPosBufferCPU));
     //ThrowIfFailed(D3DCreateBlob(vbColorBoxByteSize, &mBoxGeo->VertexColorBufferCPU));
@@ -442,34 +459,32 @@ void BoxApp::BuildBoxGeometry()
     //CopyMemory(mBoxGeo->IndexBufferCPU->GetBufferPointer(), indicesBox.data(), ibBoxByteSize);
 
     // Ex 7 
-    ThrowIfFailed(D3DCreateBlob(vbPosByteSize, &mBoxGeo->VertexPosBufferCPU));
-    ThrowIfFailed(D3DCreateBlob(vbColorByteSize, &mBoxGeo->VertexColorBufferCPU));
-	CopyMemory(mBoxGeo->VertexPosBufferCPU->GetBufferPointer(), verticesPos.data(), vbPosByteSize);
-	CopyMemory(mBoxGeo->VertexColorBufferCPU->GetBufferPointer(), verticesColor.data(), vbColorByteSize);
+ //   ThrowIfFailed(D3DCreateBlob(vbPosByteSize, &mBoxGeo->VertexPosBufferCPU));
+ //   ThrowIfFailed(D3DCreateBlob(vbColorByteSize, &mBoxGeo->VertexColorBufferCPU));
+	//CopyMemory(mBoxGeo->VertexPosBufferCPU->GetBufferPointer(), verticesPos.data(), vbPosByteSize);
+	//CopyMemory(mBoxGeo->VertexColorBufferCPU->GetBufferPointer(), verticesColor.data(), vbColorByteSize);
    
 	ThrowIfFailed(D3DCreateBlob(ibByteSize, &mBoxGeo->IndexBufferCPU));
 	CopyMemory(mBoxGeo->IndexBufferCPU->GetBufferPointer(), indices.data(), ibByteSize);
 
-    // Ex 2 COMMENT OUT
-	/*mBoxGeo->VertexBufferGPU = d3dUtil::CreateDefaultBuffer(md3dDevice.Get(),
-		mCommandList.Get(), vertices.data(), vbByteSize, mBoxGeo->VertexBufferUploader);*/
+	mBoxGeo->VertexBufferGPU = d3dUtil::CreateDefaultBuffer(md3dDevice.Get(),
+		mCommandList.Get(), vertices.data(), vbByteSize, mBoxGeo->VertexBufferUploader);
+
     // Ex 2
-    mBoxGeo->VertexPosBufferGPU = d3dUtil::CreateDefaultBuffer(md3dDevice.Get(),
-        mCommandList.Get(), verticesPos.data(), vbPosByteSize, mBoxGeo->VertexPosBufferUploader);
-    mBoxGeo->VertexColorBufferGPU = d3dUtil::CreateDefaultBuffer(md3dDevice.Get(),
-        mCommandList.Get(), verticesColor.data(), vbColorByteSize, mBoxGeo->VertexColorBufferUploader);
+    //mBoxGeo->VertexPosBufferGPU = d3dUtil::CreateDefaultBuffer(md3dDevice.Get(),
+    //    mCommandList.Get(), verticesPos.data(), vbPosByteSize, mBoxGeo->VertexPosBufferUploader);
 
 	mBoxGeo->IndexBufferGPU = d3dUtil::CreateDefaultBuffer(md3dDevice.Get(),
 		mCommandList.Get(), indices.data(), ibByteSize, mBoxGeo->IndexBufferUploader);
 
-    // Ex 2 COMMENT OUT
-	//mBoxGeo->VertexByteStride = sizeof(Vertex);
-	//mBoxGeo->VertexBufferByteSize = vbByteSize;
+	mBoxGeo->VertexByteStride = sizeof(Vertex);
+	mBoxGeo->VertexBufferByteSize = vbByteSize;
+
     // Ex 2
-    mBoxGeo->VertexPosByteStride = sizeof(VPosData);
-    mBoxGeo->VertexColorByteStride = sizeof(VColorData);
-    mBoxGeo->VertexPosBufferByteSize = vbPosByteSize;
-    mBoxGeo->VertexColorBufferByteSize = vbColorByteSize;
+    //mBoxGeo->VertexPosByteStride = sizeof(VPosData);
+    //mBoxGeo->VertexColorByteStride = sizeof(VColorData);
+    //mBoxGeo->VertexPosBufferByteSize = vbPosByteSize;
+    //mBoxGeo->VertexColorBufferByteSize = vbColorByteSize;
     
 	mBoxGeo->IndexFormat = DXGI_FORMAT_R16_UINT;
 	mBoxGeo->IndexBufferByteSize = ibByteSize;
@@ -488,7 +503,7 @@ void BoxApp::BuildBoxGeometry()
     SubmeshGeometry submeshPyramid;
     submeshPyramid.IndexCount = (UINT)indicesPyramid.size();
     submeshPyramid.StartIndexLocation = submeshBox.StartIndexLocation + indicesBox.size();
-    submeshPyramid.BaseVertexLocation = submeshBox.BaseVertexLocation + verticesPosBox.size();
+    submeshPyramid.BaseVertexLocation = submeshBox.BaseVertexLocation + verticesBox.size();
 
 	mBoxGeo->DrawArgs["box"] = submeshBox;
 	mBoxGeo->DrawArgs["pyramid"] = submeshPyramid;
@@ -512,11 +527,18 @@ void BoxApp::BuildPSO()
 	};
 
     D3D12_RASTERIZER_DESC rasterizerDesc = {};
-    rasterizerDesc.FillMode = D3D12_FILL_MODE_SOLID; // 设置填充模式
-    rasterizerDesc.CullMode = D3D12_CULL_MODE_BACK;  // 设置剔除模式
-    rasterizerDesc.FrontCounterClockwise = true;
+    rasterizerDesc.FillMode = D3D12_FILL_MODE_SOLID; 
+    //rasterizerDesc.FillMode = D3D12_FILL_MODE_WIREFRAME; // EX 8
+    rasterizerDesc.CullMode = D3D12_CULL_MODE_BACK; 
+    //rasterizerDesc.CullMode = D3D12_CULL_MODE_NONE;  // Ex 9
+    //rasterizerDesc.CullMode = D3D12_CULL_MODE_FRONT;  // Ex 9
+    //rasterizerDesc.FrontCounterClockwise = true;
+    rasterizerDesc.DepthClipEnable = TRUE;
 
-    psoDesc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);  //rasterizerDesc;
+    // Ex 8 COMMENT OUT
+    //psoDesc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT); 
+    // Ex 8 
+    psoDesc.RasterizerState = rasterizerDesc;
     psoDesc.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
     psoDesc.DepthStencilState = CD3DX12_DEPTH_STENCIL_DESC(D3D12_DEFAULT);
     psoDesc.SampleMask = UINT_MAX;
