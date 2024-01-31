@@ -21,6 +21,9 @@ using namespace DirectX::PackedVector;
 
 const int gNumFrameResources = 3;
 
+//#define EX1
+//#define EX2
+
 // Lightweight structure stores parameters to draw a shape.  This will
 // vary from app-to-app.
 struct RenderItem
@@ -460,7 +463,16 @@ void LitWavesApp::UpdateMainPassCB(const GameTimer& gt)
 	XMVECTOR lightDir = -MathHelper::SphericalToCartesian(1.0f, mSunTheta, mSunPhi);
 
 	XMStoreFloat3(&mMainPassCB.Lights[0].Direction, lightDir);
+#ifndef EX1
 	mMainPassCB.Lights[0].Strength = { 1.0f, 1.0f, 0.9f };
+#else 
+	float pluseFactor = sinf(gt.TotalTime() * 2);
+	float red = 16.0f;
+	mMainPassCB.Lights[0].Strength = { red * pluseFactor,
+									   0.2f * pluseFactor,
+									   0.2f * pluseFactor };
+#endif // !EX1
+	
 
 	auto currPassCB = mCurrFrameResource->PassCB.get();
 	currPassCB->CopyData(0, mMainPassCB);
@@ -705,7 +717,13 @@ void LitWavesApp::BuildMaterials()
 	grass->MatCBIndex = 0;
     grass->DiffuseAlbedo = XMFLOAT4(0.2f, 0.6f, 0.2f, 1.0f);
     grass->FresnelR0 = XMFLOAT3(0.01f, 0.01f, 0.01f);
-    grass->Roughness = 0.125f;
+#ifndef EX2
+	grass->Roughness = 0.125f;
+#else 
+	grass->Roughness = 10.0f;
+#endif // !EX2
+
+    
 
     // This is not a good water material definition, but we do not have all the rendering
     // tools we need (transparency, environment reflection), so we fake it for now.
@@ -714,7 +732,12 @@ void LitWavesApp::BuildMaterials()
 	water->MatCBIndex = 1;
     water->DiffuseAlbedo = XMFLOAT4(0.0f, 0.2f, 0.6f, 1.0f);
     water->FresnelR0 = XMFLOAT3(0.1f, 0.1f, 0.1f);
-    water->Roughness = 0.0f;
+#ifndef EX2
+	water->Roughness = 0.0f;
+#else
+	water->Roughness = 0.0f;
+#endif // !EX2
+
 
 	mMaterials["grass"] = std::move(grass);
 	mMaterials["water"] = std::move(water);
