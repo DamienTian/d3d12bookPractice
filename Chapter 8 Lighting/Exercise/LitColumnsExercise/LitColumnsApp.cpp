@@ -18,7 +18,8 @@ using namespace DirectX::PackedVector;
 const int gNumFrameResources = 3;
 
 //#define EX3
-#define EX4
+//#define EX4
+#define EX5
 
 // Lightweight structure stores parameters to draw a shape.  This will
 // vary from app-to-app.
@@ -129,10 +130,9 @@ private:
 
     POINT mLastMousePos;
 
-#ifdef EX4
+	// For Chapter 8 Exercises
 	std::vector<XMFLOAT3> mSpherePos;
-#endif // EX4
-
+	XMFLOAT3 spotAimPos;
 };
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE prevInstance,
@@ -448,9 +448,22 @@ void LitColumnsApp::UpdateMainPassCB(const GameTimer& gt)
 #elif defined EX4
 	int index = 0;	// index for mMainPassCB
 	for (auto pos : mSpherePos) {
+		mMainPassCB.Lights[index].Strength = { 0.0f, 1.0f, 0.0f };
 		mMainPassCB.Lights[index].FalloffStart = 1.0f;
 		mMainPassCB.Lights[index].FalloffEnd = 10.0f;
 		mMainPassCB.Lights[index].Position = pos;
+		index++;
+	}
+#elif defined EX5
+	int index = 0;	// index for mMainPassCB
+	for (auto pos : mSpherePos) {
+		mMainPassCB.Lights[index].Strength = { 0.0f, 1.0f, 0.5f };
+		mMainPassCB.Lights[index].FalloffStart = 1.0f;
+		mMainPassCB.Lights[index].FalloffEnd = 10.0f;
+		mMainPassCB.Lights[index].Position = pos;
+		mMainPassCB.Lights[index].SpotPower = 1.0f;
+		//mMainPassCB.Lights[index].Direction = XMFLOAT3(spotAimPos.x - pos.x, spotAimPos.y - pos.y, spotAimPos.z - pos.z);
+		mMainPassCB.Lights[index].Direction = XMFLOAT3(0.0f, -1.2f, 0.0f);
 		index++;
 	}
 #endif
@@ -817,7 +830,15 @@ void LitColumnsApp::BuildRenderItems()
 	mAllRitems.push_back(std::move(gridRitem));
 
 	auto skullRitem = std::make_unique<RenderItem>();
-	XMStoreFloat4x4(&skullRitem->World, XMMatrixScaling(0.5f, 0.5f, 0.5f)*XMMatrixTranslation(0.0f, 1.0f, 0.0f));
+	auto worldMatrix = XMMatrixScaling(0.5f, 0.5f, 0.5f) * XMMatrixTranslation(0.0f, 1.0f, 0.0f); 	// EX5
+	XMStoreFloat4x4(&skullRitem->World, worldMatrix);
+
+	// EX5 - -  - -  - -  - -  - -  - -  - -  - -  - -  - -  - -  - -  - -  - - 
+	XMVECTOR translationVector = worldMatrix.r[3];
+	XMStoreFloat3(&spotAimPos, translationVector);
+	spotAimPos.y += 5.0f;
+	//  - -  - -  - -  - -  - -  - -  - -  - -  - -  - -  - -  - -  - -  - - 
+
 	skullRitem->TexTransform = MathHelper::Identity4x4();
 	skullRitem->ObjCBIndex = 2;
 	skullRitem->Mat = mMaterials["skullMat"].get();
@@ -843,10 +864,14 @@ void LitColumnsApp::BuildRenderItems()
 		XMMATRIX leftSphereWorld = XMMatrixTranslation(-5.0f, 3.5f, -10.0f + i*5.0f);
 		XMMATRIX rightSphereWorld = XMMatrixTranslation(+5.0f, 3.5f, -10.0f + i*5.0f);
 
-#ifdef EX4
-		mSpherePos.push_back(XMFLOAT3(-5.0f, 3.5f, -10.0f + i * 5.0f));
-		mSpherePos.push_back(XMFLOAT3(+5.0f, 3.5f, -10.0f + i * 5.0f));
-#endif // EX4
+		// EX5 - -  - -  - -  - -  - -  - -  - -  - -  - -  - -  - -  - -  - -  - - 
+		XMFLOAT3 leftSpherePos, rightSpherePos;
+		XMStoreFloat3(&leftSpherePos, leftSphereWorld.r[3]);
+		XMStoreFloat3(&rightSpherePos, rightSphereWorld.r[3]);
+		//  - -  - -  - -  - -  - -  - -  - -  - -  - -  - -  - -  - -  - -  - - 
+
+		mSpherePos.push_back(leftSpherePos);
+		mSpherePos.push_back(rightSpherePos);
 
 		XMStoreFloat4x4(&leftCylRitem->World, leftCylWorld);
 		XMStoreFloat4x4(&leftCylRitem->TexTransform, brickTexTransform);

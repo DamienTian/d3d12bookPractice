@@ -4,28 +4,36 @@
 // Default shader, currently supports lighting.
 //***************************************************************************************
 
-#define EX4
+//#define EX4
+#define EX5
 
-// Defaults for number of lights.
-#ifndef NUM_DIR_LIGHTS
-    #ifndef EX4
-        #define NUM_DIR_LIGHTS 3
-    #else
-        #define NUM_DIR_LIGHTS 0
-    #endif // EX4
-#endif
+//#ifndef NUM_DIR_LIGHTS
+//    #if defined(EX4)
+//        #define NUM_DIR_LIGHTS 3
+//    #else
+//        #define NUM_DIR_LIGHTS 0
+//    #endif // EX4 or EX5
+//#endif
 
-#ifndef NUM_POINT_LIGHTS
-    #ifndef EX4
-        #define NUM_POINT_LIGHTS 0
-    #else
-        #define NUM_POINT_LIGHTS 10
-    #endif // EX4
-#endif
+//#ifndef NUM_POINT_LIGHTS
+//    #if defined(EX4)
+//        #define NUM_POINT_LIGHTS 10
+//    #else
+//        #define NUM_POINT_LIGHTS 0
+//    #endif // EX4
+//#endif
 
-#ifndef NUM_SPOT_LIGHTS
-    #define NUM_SPOT_LIGHTS 0
-#endif
+//#ifndef NUM_SPOT_LIGHTS
+//    #if defined(EX5)
+//        #define NUM_SPOT_LIGHTS 10
+//    #else
+//        #define NUM_SPOT_LIGHTS 0
+//    #endif // EX5
+//#endif
+
+#define NUM_DIR_LIGHTS 0
+#define NUM_POINT_LIGHTS 0
+#define NUM_SPOT_LIGHTS 10
 
 // Include structures and functions for lighting.
 #include "LightingUtil.hlsl"
