@@ -1,1 +1,0 @@
-E:\DirectX12\d3d12bookPractice\Chapter 9 Texturing\Exercises\TexWavesExercise\x64\Debug\TexWavesExercise.exe
