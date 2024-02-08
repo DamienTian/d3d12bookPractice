@@ -1,0 +1,1 @@
+E:\DirectX12\d3d12bookPractice\Chapter 9 Texturing\Exercises\TexColumnsExercise\x64\Debug\TexColumnsExercise.exe
