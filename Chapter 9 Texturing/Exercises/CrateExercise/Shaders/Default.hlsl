@@ -20,8 +20,18 @@
 // Include structures and functions for lighting.
 #include "LightingUtil.hlsl"
 
+#define EX1
+
 Texture2D    gDiffuseMap : register(t0);
-SamplerState gsamLinear  : register(s0);
+#ifndef EX1
+//SamplerState gsamLinear  : register(s0);
+SamplerState gsamLinear  : register(s4);
+#elif defined(EX1)
+//SamplerState gsamLinear : register(s2); // linearWrap
+//SamplerState gsamLinear : register(s3); // linearClamp
+//SamplerState gsamLinear : register(s6); // linearBorder
+SamplerState gsamLinear : register(s7); // linearMirror
+#endif // EX1
 
 
 // Constant data that varies per frame.
