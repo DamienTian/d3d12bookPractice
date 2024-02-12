@@ -20,17 +20,23 @@
 // Include structures and functions for lighting.
 #include "LightingUtil.hlsl"
 
-#define EX1
+//#define EX1
+#define EX3
 
-Texture2D    gDiffuseMap : register(t0);
-#ifndef EX1
-//SamplerState gsamLinear  : register(s0);
-SamplerState gsamLinear  : register(s4);
-#elif defined(EX1)
+#if defined(EX3)
+Texture2D gTexture[2] : register(t0);
+#else
+Texture2D gDiffuseMap : register(t0);
+#endif
+
+#ifdef EX1
 //SamplerState gsamLinear : register(s2); // linearWrap
 //SamplerState gsamLinear : register(s3); // linearClamp
 //SamplerState gsamLinear : register(s6); // linearBorder
 SamplerState gsamLinear : register(s7); // linearMirror
+#else
+SamplerState gsamLinear  : register(s0);
+//SamplerState gsamLinear  : register(s4);
 #endif // EX1
 
 
@@ -79,7 +85,12 @@ struct VertexIn
 {
 	float3 PosL    : POSITION;
     float3 NormalL : NORMAL;
+//#if defined(EX3)
+//    float2 TexC0 : TEXCOORD0;
+//    float2 TexC1 : TEXCOORD1;
+//#else
 	float2 TexC    : TEXCOORD;
+//#endif
 };
 
 struct VertexOut
@@ -87,7 +98,12 @@ struct VertexOut
 	float4 PosH    : SV_POSITION;
     float3 PosW    : POSITION;
     float3 NormalW : NORMAL;
+//#if defined(EX3)
+//    float2 TexC0 : TEXCOORD0;
+//    float2 TexC1 : TEXCOORD1;
+//#else
 	float2 TexC    : TEXCOORD;
+//#endif
 };
 
 VertexOut VS(VertexIn vin)
@@ -103,17 +119,32 @@ VertexOut VS(VertexIn vin)
 
     // Transform to homogeneous clip space.
     vout.PosH = mul(posW, gViewProj);
-	
-	// Output vertex attributes for interpolation across triangle.
+    
+//#if defined(EX3)
+//    // Output vertex attributes for interpolation across triangle.
+//    float4 texC0 = mul(float4(vin.TexC0, 0.0f, 1.0f), gTexTransform);
+//    float4 texC1 = mul(float4(vin.TexC1, 0.0f, 1.0f), gTexTransform);
+    
+//    vout.TexC0 = mul(texC0, gMatTransform).xy;
+//    vout.TexC1 = mul(texC1, gMatTransform).xy;
+//#else
+    // Output vertex attributes for interpolation across triangle.
     float4 texC = mul(float4(vin.TexC, 0.0f, 1.0f), gTexTransform);
     vout.TexC = mul(texC, gMatTransform).xy;
+//#endif
 
     return vout;
 }
 
 float4 PS(VertexOut pin) : SV_Target
 {
+#if defined(EX3)
+    float4 diffuseAlbedo1 = gTexture[0].Sample(gsamLinear, pin.TexC) * gDiffuseAlbedo;
+    float4 diffuseAlbedo2 = gTexture[1].Sample(gsamLinear, pin.TexC) * gDiffuseAlbedo;
+    float4 diffuseAlbedo = diffuseAlbedo1 * diffuseAlbedo2;
+#else
     float4 diffuseAlbedo = gDiffuseMap.Sample(gsamLinear, pin.TexC) * gDiffuseAlbedo;
+#endif
 
     // Interpolating normal can unnormalize it, so renormalize it.
     pin.NormalW = normalize(pin.NormalW);

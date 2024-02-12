@@ -18,7 +18,8 @@ using namespace DirectX::PackedVector;
 const int gNumFrameResources = 3;
 
 //#define EX1
-#define EX2
+//#define EX2
+#define EX3
 
 // Lightweight structure stores parameters to draw a shape.  This will
 // vary from app-to-app.
@@ -92,6 +93,11 @@ private:
     void DrawRenderItems(ID3D12GraphicsCommandList* cmdList, const std::vector<RenderItem*>& ritems);
 
 	std::array<const CD3DX12_STATIC_SAMPLER_DESC, 8> GetStaticSamplers();
+
+	void _LoadTextureDefault();
+	void _LoadTextureEX2();
+	void _LoadTextureEX3();
+	
 
 private:
 
@@ -452,31 +458,79 @@ void CrateApp::UpdateMainPassCB(const GameTimer& gt)
 
 void CrateApp::LoadTextures()
 {
+#ifdef EX2
+	_LoadTextureEX2();
+#elif defined(EX3)
+	_LoadTextureEX3();
+#else
+	_LoadTextureDefault();
+#endif //EX2
+}
+
+void CrateApp::_LoadTextureDefault() {
 	auto woodCrateTex = std::make_unique<Texture>();
 	woodCrateTex->Name = "woodCrateTex";
-#ifndef EX2
+
 	woodCrateTex->Filename = L"../../../Textures/WoodCrate01.dds";
-#else
-	woodCrateTex->Filename = L"../Textures/softRendererCover.dds";
-#endif //EX2
-	
+
 	ThrowIfFailed(DirectX::CreateDDSTextureFromFile12(md3dDevice.Get(),
 		mCommandList.Get(), woodCrateTex->Filename.c_str(),
 		woodCrateTex->Resource, woodCrateTex->UploadHeap));
- 
+
 	mTextures[woodCrateTex->Name] = std::move(woodCrateTex);
+}
+
+void CrateApp::_LoadTextureEX2() {
+	auto woodCrateTex = std::make_unique<Texture>();
+	woodCrateTex->Name = "woodCrateTex";
+
+	woodCrateTex->Filename = L"../Textures/softRendererCover.dds";
+
+	ThrowIfFailed(DirectX::CreateDDSTextureFromFile12(md3dDevice.Get(),
+		mCommandList.Get(), woodCrateTex->Filename.c_str(),
+		woodCrateTex->Resource, woodCrateTex->UploadHeap));
+
+	mTextures[woodCrateTex->Name] = std::move(woodCrateTex);
+}
+
+void CrateApp::_LoadTextureEX3() {
+	auto fireTex = std::make_unique<Texture>();
+	auto fireLightTex = std::make_unique<Texture>();
+	
+	fireTex->Name = "fireTex";
+	fireLightTex->Name = "fireLightTex";
+
+	fireTex->Filename = L"../Textures/fire.dds";
+	fireLightTex->Filename = L"../Textures/fireLight.dds";
+
+	ThrowIfFailed(DirectX::CreateDDSTextureFromFile12(md3dDevice.Get(), mCommandList.Get(), 
+		fireTex->Filename.c_str(), fireTex->Resource, fireTex->UploadHeap));
+	
+	ThrowIfFailed(DirectX::CreateDDSTextureFromFile12(md3dDevice.Get(), mCommandList.Get(), 
+		fireLightTex->Filename.c_str(), fireLightTex->Resource, fireLightTex->UploadHeap));
+
+	mTextures[fireTex->Name] = std::move(fireTex);
+	mTextures[fireLightTex->Name] = std::move(fireLightTex);
 }
 
 void CrateApp::BuildRootSignature()
 {
 	CD3DX12_DESCRIPTOR_RANGE texTable;
+#if defined(EX3)
+	texTable.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 2, 0);
+#else
 	texTable.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0);
+#endif
 
     // Root parameter can be a table, root descriptor or root constants.
     CD3DX12_ROOT_PARAMETER slotRootParameter[4];
 
 	// Perfomance TIP: Order from most frequent to least frequent.
+#if defined(EX3)
+	slotRootParameter[0].InitAsDescriptorTable(2, &texTable, D3D12_SHADER_VISIBILITY_PIXEL);
+#else
 	slotRootParameter[0].InitAsDescriptorTable(1, &texTable, D3D12_SHADER_VISIBILITY_PIXEL);
+#endif
     slotRootParameter[1].InitAsConstantBufferView(0);
     slotRootParameter[2].InitAsConstantBufferView(1);
     slotRootParameter[3].InitAsConstantBufferView(2);
@@ -513,7 +567,11 @@ void CrateApp::BuildDescriptorHeaps()
 	// Create the SRV heap.
 	//
 	D3D12_DESCRIPTOR_HEAP_DESC srvHeapDesc = {};
+#if defined(EX3)
+	srvHeapDesc.NumDescriptors = 2;
+#else
 	srvHeapDesc.NumDescriptors = 1;
+#endif
 	srvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
 	srvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
 	ThrowIfFailed(md3dDevice->CreateDescriptorHeap(&srvHeapDesc, IID_PPV_ARGS(&mSrvDescriptorHeap)));
@@ -523,8 +581,27 @@ void CrateApp::BuildDescriptorHeaps()
 	//
 	CD3DX12_CPU_DESCRIPTOR_HANDLE hDescriptor(mSrvDescriptorHeap->GetCPUDescriptorHandleForHeapStart());
 
-	auto woodCrateTex = mTextures["woodCrateTex"]->Resource;
+#if defined(EX3)
+	auto fireTex = mTextures["fireTex"]->Resource;
+	auto fireLightTex = mTextures["fireLightTex"]->Resource;
  
+	D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+	srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+	srvDesc.Format = fireTex->GetDesc().Format;
+	srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+	srvDesc.Texture2D.MostDetailedMip = 0;
+	srvDesc.Texture2D.MipLevels = fireTex->GetDesc().MipLevels;
+	srvDesc.Texture2D.ResourceMinLODClamp = 0.0f;
+	md3dDevice->CreateShaderResourceView(fireTex.Get(), &srvDesc, hDescriptor);
+
+	hDescriptor.Offset(1, mCbvSrvDescriptorSize);
+
+	srvDesc.Format = fireLightTex->GetDesc().Format;
+	srvDesc.Texture2D.MipLevels = fireLightTex->GetDesc().MipLevels;
+	md3dDevice->CreateShaderResourceView(fireLightTex.Get(), &srvDesc, hDescriptor);
+#else
+	auto woodCrateTex = mTextures["woodCrateTex"]->Resource;
+
 	D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
 	srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
 	srvDesc.Format = woodCrateTex->GetDesc().Format;
@@ -534,6 +611,7 @@ void CrateApp::BuildDescriptorHeaps()
 	srvDesc.Texture2D.ResourceMinLODClamp = 0.0f;
 
 	md3dDevice->CreateShaderResourceView(woodCrateTex.Get(), &srvDesc, hDescriptor);
+#endif
 }
 
 void CrateApp::BuildShadersAndInputLayout()
@@ -693,13 +771,22 @@ void CrateApp::DrawRenderItems(ID3D12GraphicsCommandList* cmdList, const std::ve
         cmdList->IASetIndexBuffer(&ri->Geo->IndexBufferView());
         cmdList->IASetPrimitiveTopology(ri->PrimitiveType);
 
+#if defined(EX3)
+		CD3DX12_GPU_DESCRIPTOR_HANDLE tex1(mSrvDescriptorHeap->GetGPUDescriptorHandleForHeapStart());
+		tex1.Offset(ri->Mat->DiffuseSrvHeapIndex, mCbvSrvDescriptorSize);
+		CD3DX12_GPU_DESCRIPTOR_HANDLE tex2(mSrvDescriptorHeap->GetGPUDescriptorHandleForHeapStart());
+		tex2.Offset(ri->Mat->DiffuseSrvHeapIndex + 1, mCbvSrvDescriptorSize);
+
+		cmdList->SetGraphicsRootDescriptorTable(0, tex1);
+		cmdList->SetGraphicsRootDescriptorTable(0, tex2);
+#else
 		CD3DX12_GPU_DESCRIPTOR_HANDLE tex(mSrvDescriptorHeap->GetGPUDescriptorHandleForHeapStart());
 		tex.Offset(ri->Mat->DiffuseSrvHeapIndex, mCbvSrvDescriptorSize);
+		cmdList->SetGraphicsRootDescriptorTable(0, tex);
+#endif
 
         D3D12_GPU_VIRTUAL_ADDRESS objCBAddress = objectCB->GetGPUVirtualAddress() + ri->ObjCBIndex*objCBByteSize;
 		D3D12_GPU_VIRTUAL_ADDRESS matCBAddress = matCB->GetGPUVirtualAddress() + ri->Mat->MatCBIndex*matCBByteSize;
-
-		cmdList->SetGraphicsRootDescriptorTable(0, tex);
         cmdList->SetGraphicsRootConstantBufferView(1, objCBAddress);
         cmdList->SetGraphicsRootConstantBufferView(3, matCBAddress);
 
