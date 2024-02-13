@@ -21,9 +21,9 @@
 #include "LightingUtil.hlsl"
 
 //#define EX1
-#define EX3
+#define EX3_4
 
-#if defined(EX3)
+#if defined(EX3_4)
 Texture2D gTexture[2] : register(t0);
 #else
 Texture2D gDiffuseMap : register(t0);
@@ -85,12 +85,7 @@ struct VertexIn
 {
 	float3 PosL    : POSITION;
     float3 NormalL : NORMAL;
-//#if defined(EX3)
-//    float2 TexC0 : TEXCOORD0;
-//    float2 TexC1 : TEXCOORD1;
-//#else
 	float2 TexC    : TEXCOORD;
-//#endif
 };
 
 struct VertexOut
@@ -98,16 +93,18 @@ struct VertexOut
 	float4 PosH    : SV_POSITION;
     float3 PosW    : POSITION;
     float3 NormalW : NORMAL;
-//#if defined(EX3)
-//    float2 TexC0 : TEXCOORD0;
-//    float2 TexC1 : TEXCOORD1;
-//#else
 	float2 TexC    : TEXCOORD;
-//#endif
 };
 
 VertexOut VS(VertexIn vin)
 {
+#if defined(EX3_4)
+    // EX4
+    // change the UV sample range to (-0.5, 0.5), which makes the texture coordinate origin at the center of the texture
+    //  math here: UV Range (0, 1) - (0.5f, 0.5f) = (-0.5, 0.5)
+    vin.TexC -= float2(0.5f, 0.5f);
+#endif
+    
 	VertexOut vout = (VertexOut)0.0f;
 	
     // Transform to world space.
@@ -120,25 +117,22 @@ VertexOut VS(VertexIn vin)
     // Transform to homogeneous clip space.
     vout.PosH = mul(posW, gViewProj);
     
-//#if defined(EX3)
-//    // Output vertex attributes for interpolation across triangle.
-//    float4 texC0 = mul(float4(vin.TexC0, 0.0f, 1.0f), gTexTransform);
-//    float4 texC1 = mul(float4(vin.TexC1, 0.0f, 1.0f), gTexTransform);
-    
-//    vout.TexC0 = mul(texC0, gMatTransform).xy;
-//    vout.TexC1 = mul(texC1, gMatTransform).xy;
-//#else
     // Output vertex attributes for interpolation across triangle.
     float4 texC = mul(float4(vin.TexC, 0.0f, 1.0f), gTexTransform);
     vout.TexC = mul(texC, gMatTransform).xy;
-//#endif
+    
+#if defined(EX3_4)
+    // EX4
+    // move texture back to the center
+    vout.TexC += float2(0.5f, 0.5f);
+#endif
 
     return vout;
 }
 
 float4 PS(VertexOut pin) : SV_Target
 {
-#if defined(EX3)
+#if defined(EX3_4)
     float4 diffuseAlbedo1 = gTexture[0].Sample(gsamLinear, pin.TexC) * gDiffuseAlbedo;
     float4 diffuseAlbedo2 = gTexture[1].Sample(gsamLinear, pin.TexC) * gDiffuseAlbedo;
     float4 diffuseAlbedo = diffuseAlbedo1 * diffuseAlbedo2;

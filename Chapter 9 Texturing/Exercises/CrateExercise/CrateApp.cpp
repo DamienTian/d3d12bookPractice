@@ -18,8 +18,10 @@ using namespace DirectX::PackedVector;
 const int gNumFrameResources = 3;
 
 //#define EX1
-//#define EX2
-#define EX3
+//#define EX2 
+#define EX3_4 // for both Exercise 3 and 4
+
+// EX 4 ref: https://zhuanlan.zhihu.com/p/165481502
 
 // Lightweight structure stores parameters to draw a shape.  This will
 // vary from app-to-app.
@@ -96,7 +98,7 @@ private:
 
 	void _LoadTextureDefault();
 	void _LoadTextureEX2();
-	void _LoadTextureEX3();
+	void _LoadTextureEX3AndEX4();
 	
 
 private:
@@ -368,7 +370,13 @@ void CrateApp::UpdateCamera(const GameTimer& gt)
 
 void CrateApp::AnimateMaterials(const GameTimer& gt)
 {
-	
+#if defined(EX3_4)
+	auto material = mMaterials["woodCrate"].get();
+	// spin material on z-axis
+	XMStoreFloat4x4(&material->MatTransform, XMMatrixRotationZ(gt.TotalTime()));
+	//material->NumFramesDirty = gNumFrameResources;
+	material->NumFramesDirty = 1; // make the NumFramesDirty >= 0 to keep the material updating
+#endif
 }
 
 void CrateApp::UpdateObjectCBs(const GameTimer& gt)
@@ -460,8 +468,8 @@ void CrateApp::LoadTextures()
 {
 #ifdef EX2
 	_LoadTextureEX2();
-#elif defined(EX3)
-	_LoadTextureEX3();
+#elif defined(EX3_4)
+	_LoadTextureEX3AndEX4();
 #else
 	_LoadTextureDefault();
 #endif //EX2
@@ -493,7 +501,7 @@ void CrateApp::_LoadTextureEX2() {
 	mTextures[woodCrateTex->Name] = std::move(woodCrateTex);
 }
 
-void CrateApp::_LoadTextureEX3() {
+void CrateApp::_LoadTextureEX3AndEX4() {
 	auto fireTex = std::make_unique<Texture>();
 	auto fireLightTex = std::make_unique<Texture>();
 	
@@ -516,7 +524,7 @@ void CrateApp::_LoadTextureEX3() {
 void CrateApp::BuildRootSignature()
 {
 	CD3DX12_DESCRIPTOR_RANGE texTable;
-#if defined(EX3)
+#if defined(EX3_4)
 	texTable.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 2, 0);
 #else
 	texTable.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0);
@@ -526,11 +534,7 @@ void CrateApp::BuildRootSignature()
     CD3DX12_ROOT_PARAMETER slotRootParameter[4];
 
 	// Perfomance TIP: Order from most frequent to least frequent.
-#if defined(EX3)
-	slotRootParameter[0].InitAsDescriptorTable(2, &texTable, D3D12_SHADER_VISIBILITY_PIXEL);
-#else
 	slotRootParameter[0].InitAsDescriptorTable(1, &texTable, D3D12_SHADER_VISIBILITY_PIXEL);
-#endif
     slotRootParameter[1].InitAsConstantBufferView(0);
     slotRootParameter[2].InitAsConstantBufferView(1);
     slotRootParameter[3].InitAsConstantBufferView(2);
@@ -567,7 +571,7 @@ void CrateApp::BuildDescriptorHeaps()
 	// Create the SRV heap.
 	//
 	D3D12_DESCRIPTOR_HEAP_DESC srvHeapDesc = {};
-#if defined(EX3)
+#if defined(EX3_4)
 	srvHeapDesc.NumDescriptors = 2;
 #else
 	srvHeapDesc.NumDescriptors = 1;
@@ -581,7 +585,7 @@ void CrateApp::BuildDescriptorHeaps()
 	//
 	CD3DX12_CPU_DESCRIPTOR_HANDLE hDescriptor(mSrvDescriptorHeap->GetCPUDescriptorHandleForHeapStart());
 
-#if defined(EX3)
+#if defined(EX3_4)
 	auto fireTex = mTextures["fireTex"]->Resource;
 	auto fireLightTex = mTextures["fireLightTex"]->Resource;
  
@@ -594,7 +598,7 @@ void CrateApp::BuildDescriptorHeaps()
 	srvDesc.Texture2D.ResourceMinLODClamp = 0.0f;
 	md3dDevice->CreateShaderResourceView(fireTex.Get(), &srvDesc, hDescriptor);
 
-	hDescriptor.Offset(1, mCbvSrvDescriptorSize);
+	hDescriptor.Offset(mCbvSrvDescriptorSize);
 
 	srvDesc.Format = fireLightTex->GetDesc().Format;
 	srvDesc.Texture2D.MipLevels = fireLightTex->GetDesc().MipLevels;
@@ -771,19 +775,9 @@ void CrateApp::DrawRenderItems(ID3D12GraphicsCommandList* cmdList, const std::ve
         cmdList->IASetIndexBuffer(&ri->Geo->IndexBufferView());
         cmdList->IASetPrimitiveTopology(ri->PrimitiveType);
 
-#if defined(EX3)
-		CD3DX12_GPU_DESCRIPTOR_HANDLE tex1(mSrvDescriptorHeap->GetGPUDescriptorHandleForHeapStart());
-		tex1.Offset(ri->Mat->DiffuseSrvHeapIndex, mCbvSrvDescriptorSize);
-		CD3DX12_GPU_DESCRIPTOR_HANDLE tex2(mSrvDescriptorHeap->GetGPUDescriptorHandleForHeapStart());
-		tex2.Offset(ri->Mat->DiffuseSrvHeapIndex + 1, mCbvSrvDescriptorSize);
-
-		cmdList->SetGraphicsRootDescriptorTable(0, tex1);
-		cmdList->SetGraphicsRootDescriptorTable(0, tex2);
-#else
 		CD3DX12_GPU_DESCRIPTOR_HANDLE tex(mSrvDescriptorHeap->GetGPUDescriptorHandleForHeapStart());
 		tex.Offset(ri->Mat->DiffuseSrvHeapIndex, mCbvSrvDescriptorSize);
 		cmdList->SetGraphicsRootDescriptorTable(0, tex);
-#endif
 
         D3D12_GPU_VIRTUAL_ADDRESS objCBAddress = objectCB->GetGPUVirtualAddress() + ri->ObjCBIndex*objCBByteSize;
 		D3D12_GPU_VIRTUAL_ADDRESS matCBAddress = matCB->GetGPUVirtualAddress() + ri->Mat->MatCBIndex*matCBByteSize;
