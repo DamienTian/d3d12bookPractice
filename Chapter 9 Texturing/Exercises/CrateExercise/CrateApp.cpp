@@ -371,11 +371,12 @@ void CrateApp::UpdateCamera(const GameTimer& gt)
 void CrateApp::AnimateMaterials(const GameTimer& gt)
 {
 #if defined(EX3_4)
+	// EX4 ONLY
 	auto material = mMaterials["woodCrate"].get();
 	// spin material on z-axis
 	XMStoreFloat4x4(&material->MatTransform, XMMatrixRotationZ(gt.TotalTime()));
 	//material->NumFramesDirty = gNumFrameResources;
-	material->NumFramesDirty = 1; // make the NumFramesDirty >= 0 to keep the material updating
+	material->NumFramesDirty = 1; // make the NumFramesDirty >= 0 to keep the material frame resource updating
 #endif
 }
 
