@@ -1,0 +1,1 @@
+E:\DirectX12\d3d12bookPractice\Chapter 11 Stenciling\Exercise\StencilDemoExercise\x64\Debug\StencilDemoExercise.exe
