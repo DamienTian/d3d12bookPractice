@@ -5,8 +5,12 @@
 #include "../Common/d3dApp.h"
 #include "../Common/MathHelper.h"
 #include "../Common/UploadBuffer.h"
-#include "../Common/GeometryGenerator.h"
+#include "../Common/GeometryGenerator.h"    
 #include "FrameResource.h"
+
+//#define EX3
+//#define EX4
+//#define EX5
 
 using Microsoft::WRL::ComPtr;
 using namespace DirectX;
@@ -563,12 +567,15 @@ void StencilApp::LoadTextures()
 		mCommandList.Get(), bricksTex->Filename.c_str(),
 		bricksTex->Resource, bricksTex->UploadHeap));
 
+#ifndef EX5
 	auto checkboardTex = std::make_unique<Texture>();
 	checkboardTex->Name = "checkboardTex";
 	checkboardTex->Filename = L"../../../Textures/checkboard.dds";
 	ThrowIfFailed(DirectX::CreateDDSTextureFromFile12(md3dDevice.Get(),
 		mCommandList.Get(), checkboardTex->Filename.c_str(),
 		checkboardTex->Resource, checkboardTex->UploadHeap));
+	mTextures[checkboardTex->Name] = std::move(checkboardTex);
+#endif // !EX5
 
 	auto iceTex = std::make_unique<Texture>();
 	iceTex->Name = "iceTex";
@@ -585,7 +592,6 @@ void StencilApp::LoadTextures()
 		white1x1Tex->Resource, white1x1Tex->UploadHeap));
 
 	mTextures[bricksTex->Name] = std::move(bricksTex);
-	mTextures[checkboardTex->Name] = std::move(checkboardTex);
 	mTextures[iceTex->Name] = std::move(iceTex);
 	mTextures[white1x1Tex->Name] = std::move(white1x1Tex);
 }
@@ -647,7 +653,9 @@ void StencilApp::BuildDescriptorHeaps()
 	CD3DX12_CPU_DESCRIPTOR_HANDLE hDescriptor(mSrvDescriptorHeap->GetCPUDescriptorHandleForHeapStart());
 
 	auto bricksTex = mTextures["bricksTex"]->Resource;
+#ifndef EX5
 	auto checkboardTex = mTextures["checkboardTex"]->Resource;
+#endif
 	auto iceTex = mTextures["iceTex"]->Resource;
 	auto white1x1Tex = mTextures["white1x1Tex"]->Resource;
 
@@ -660,10 +668,11 @@ void StencilApp::BuildDescriptorHeaps()
 	md3dDevice->CreateShaderResourceView(bricksTex.Get(), &srvDesc, hDescriptor);
 
 	// next descriptor
+#ifndef EX5
 	hDescriptor.Offset(1, mCbvSrvDescriptorSize);
-
 	srvDesc.Format = checkboardTex->GetDesc().Format;
 	md3dDevice->CreateShaderResourceView(checkboardTex.Get(), &srvDesc, hDescriptor);
+#endif // EX5
 
 	// next descriptor
 	hDescriptor.Offset(1, mCbvSrvDescriptorSize);
@@ -995,7 +1004,12 @@ void StencilApp::BuildPSOs()
 	reflectionsDSS.FrontFace.StencilFailOp = D3D12_STENCIL_OP_KEEP;
 	reflectionsDSS.FrontFace.StencilDepthFailOp = D3D12_STENCIL_OP_KEEP;
 	reflectionsDSS.FrontFace.StencilPassOp = D3D12_STENCIL_OP_KEEP;
+#if defined(EX3)
+	// always return true even one check fail
+	reflectionsDSS.FrontFace.StencilFunc = D3D12_COMPARISON_FUNC_ALWAYS;
+#else
 	reflectionsDSS.FrontFace.StencilFunc = D3D12_COMPARISON_FUNC_EQUAL;
+#endif // EX3
 
 	// We are not rendering backfacing polygons, so these settings do not matter.
 	reflectionsDSS.BackFace.StencilFailOp = D3D12_STENCIL_OP_KEEP;
@@ -1025,7 +1039,11 @@ void StencilApp::BuildPSOs()
 	shadowDSS.FrontFace.StencilFailOp = D3D12_STENCIL_OP_KEEP;
 	shadowDSS.FrontFace.StencilDepthFailOp = D3D12_STENCIL_OP_KEEP;
 	shadowDSS.FrontFace.StencilPassOp = D3D12_STENCIL_OP_INCR;
+#if defined(EX4)
+	shadowDSS.FrontFace.StencilFunc = D3D12_COMPARISON_FUNC_ALWAYS;
+#else
 	shadowDSS.FrontFace.StencilFunc = D3D12_COMPARISON_FUNC_EQUAL;
+#endif
 
 	// We are not rendering backfacing polygons, so these settings do not matter.
 	shadowDSS.BackFace.StencilFailOp = D3D12_STENCIL_OP_KEEP;
@@ -1049,48 +1067,53 @@ void StencilApp::BuildFrameResources()
 
 void StencilApp::BuildMaterials()
 {
+	int currentMatCBIndex = 0;
+	int currentDiffuseSrvHeapIndex = 0;
+
 	auto bricks = std::make_unique<Material>();
 	bricks->Name = "bricks";
-	bricks->MatCBIndex = 0;
-	bricks->DiffuseSrvHeapIndex = 0;
+	bricks->MatCBIndex = currentMatCBIndex++;
+	bricks->DiffuseSrvHeapIndex = currentDiffuseSrvHeapIndex++;
 	bricks->DiffuseAlbedo = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
 	bricks->FresnelR0 = XMFLOAT3(0.05f, 0.05f, 0.05f);
 	bricks->Roughness = 0.25f;
 
+#ifndef EX5
 	auto checkertile = std::make_unique<Material>();
 	checkertile->Name = "checkertile";
-	checkertile->MatCBIndex = 1;
-	checkertile->DiffuseSrvHeapIndex = 1;
+	checkertile->MatCBIndex = currentMatCBIndex++;
+	checkertile->DiffuseSrvHeapIndex = currentDiffuseSrvHeapIndex++;
 	checkertile->DiffuseAlbedo = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
 	checkertile->FresnelR0 = XMFLOAT3(0.07f, 0.07f, 0.07f);
 	checkertile->Roughness = 0.3f;
+	mMaterials["checkertile"] = std::move(checkertile);
+#endif // EX5
 
 	auto icemirror = std::make_unique<Material>();
 	icemirror->Name = "icemirror";
-	icemirror->MatCBIndex = 2;
-	icemirror->DiffuseSrvHeapIndex = 2;
+	icemirror->MatCBIndex = currentMatCBIndex++;
+	icemirror->DiffuseSrvHeapIndex = currentDiffuseSrvHeapIndex++;
 	icemirror->DiffuseAlbedo = XMFLOAT4(1.0f, 1.0f, 1.0f, 0.3f);
 	icemirror->FresnelR0 = XMFLOAT3(0.1f, 0.1f, 0.1f);
 	icemirror->Roughness = 0.5f;
 
 	auto skullMat = std::make_unique<Material>();
 	skullMat->Name = "skullMat";
-	skullMat->MatCBIndex = 3;
-	skullMat->DiffuseSrvHeapIndex = 3;
+	skullMat->MatCBIndex = currentMatCBIndex++;
+	skullMat->DiffuseSrvHeapIndex = currentDiffuseSrvHeapIndex;
 	skullMat->DiffuseAlbedo = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
 	skullMat->FresnelR0 = XMFLOAT3(0.05f, 0.05f, 0.05f);
 	skullMat->Roughness = 0.3f;
 
 	auto shadowMat = std::make_unique<Material>();
 	shadowMat->Name = "shadowMat";
-	shadowMat->MatCBIndex = 4;
-	shadowMat->DiffuseSrvHeapIndex = 3;
+	shadowMat->MatCBIndex = currentMatCBIndex;
+	shadowMat->DiffuseSrvHeapIndex = currentDiffuseSrvHeapIndex;
 	shadowMat->DiffuseAlbedo = XMFLOAT4(0.0f, 0.0f, 0.0f, 0.5f);
 	shadowMat->FresnelR0 = XMFLOAT3(0.001f, 0.001f, 0.001f);
 	shadowMat->Roughness = 0.0f;
 
 	mMaterials["bricks"] = std::move(bricks);
-	mMaterials["checkertile"] = std::move(checkertile);
 	mMaterials["icemirror"] = std::move(icemirror);
 	mMaterials["skullMat"] = std::move(skullMat);
 	mMaterials["shadowMat"] = std::move(shadowMat);
@@ -1098,6 +1121,7 @@ void StencilApp::BuildMaterials()
 
 void StencilApp::BuildRenderItems()
 {
+#ifndef EX5
 	auto floorRitem = std::make_unique<RenderItem>();
 	floorRitem->World = MathHelper::Identity4x4();
 	floorRitem->TexTransform = MathHelper::Identity4x4();
@@ -1109,6 +1133,7 @@ void StencilApp::BuildRenderItems()
 	floorRitem->StartIndexLocation = floorRitem->Geo->DrawArgs["floor"].StartIndexLocation;
 	floorRitem->BaseVertexLocation = floorRitem->Geo->DrawArgs["floor"].BaseVertexLocation;
 	mRitemLayer[(int)RenderLayer::Opaque].push_back(floorRitem.get());
+#endif // !EX5
 
     auto wallsRitem = std::make_unique<RenderItem>();
 	wallsRitem->World = MathHelper::Identity4x4();
@@ -1163,9 +1188,11 @@ void StencilApp::BuildRenderItems()
 	mRitemLayer[(int)RenderLayer::Mirrors].push_back(mirrorRitem.get());
 	mRitemLayer[(int)RenderLayer::Transparent].push_back(mirrorRitem.get());
 
+#ifndef EX5
 	mAllRitems.push_back(std::move(floorRitem));
-	mAllRitems.push_back(std::move(wallsRitem));
+#endif // !EX5
 	mAllRitems.push_back(std::move(skullRitem));
+	mAllRitems.push_back(std::move(wallsRitem));
 	mAllRitems.push_back(std::move(reflectedSkullRitem));
 	mAllRitems.push_back(std::move(shadowedSkullRitem));
 	mAllRitems.push_back(std::move(mirrorRitem));
