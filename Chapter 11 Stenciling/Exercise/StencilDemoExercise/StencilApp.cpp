@@ -10,7 +10,8 @@
 
 //#define EX3
 //#define EX4
-//#define EX5
+#define EX5_NO_FLOOR // no need for solving the exercise problem, but I just want to make the floor disappears
+#define EX5
 
 using Microsoft::WRL::ComPtr;
 using namespace DirectX;
@@ -203,7 +204,7 @@ bool StencilApp::Initialize()
     BuildRootSignature();
 	BuildDescriptorHeaps();
     BuildShadersAndInputLayout();
-    BuildRoomGeometry();
+	BuildRoomGeometry();
 	BuildSkullGeometry();
 	BuildMaterials();
     BuildRenderItems();
@@ -567,7 +568,7 @@ void StencilApp::LoadTextures()
 		mCommandList.Get(), bricksTex->Filename.c_str(),
 		bricksTex->Resource, bricksTex->UploadHeap));
 
-#ifndef EX5
+#ifndef EX5_NO_FLOOR
 	auto checkboardTex = std::make_unique<Texture>();
 	checkboardTex->Name = "checkboardTex";
 	checkboardTex->Filename = L"../../../Textures/checkboard.dds";
@@ -575,7 +576,7 @@ void StencilApp::LoadTextures()
 		mCommandList.Get(), checkboardTex->Filename.c_str(),
 		checkboardTex->Resource, checkboardTex->UploadHeap));
 	mTextures[checkboardTex->Name] = std::move(checkboardTex);
-#endif // !EX5
+#endif // !EX5_NO_FLOOR
 
 	auto iceTex = std::make_unique<Texture>();
 	iceTex->Name = "iceTex";
@@ -642,7 +643,11 @@ void StencilApp::BuildDescriptorHeaps()
 	// Create the SRV heap.
 	//
 	D3D12_DESCRIPTOR_HEAP_DESC srvHeapDesc = {};
+#if defined (EX5_NO_FLOOR)
+	srvHeapDesc.NumDescriptors = 3;
+#else
 	srvHeapDesc.NumDescriptors = 4;
+#endif;
 	srvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
 	srvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
 	ThrowIfFailed(md3dDevice->CreateDescriptorHeap(&srvHeapDesc, IID_PPV_ARGS(&mSrvDescriptorHeap)));
@@ -653,7 +658,7 @@ void StencilApp::BuildDescriptorHeaps()
 	CD3DX12_CPU_DESCRIPTOR_HANDLE hDescriptor(mSrvDescriptorHeap->GetCPUDescriptorHandleForHeapStart());
 
 	auto bricksTex = mTextures["bricksTex"]->Resource;
-#ifndef EX5
+#ifndef EX5_NO_FLOOR
 	auto checkboardTex = mTextures["checkboardTex"]->Resource;
 #endif
 	auto iceTex = mTextures["iceTex"]->Resource;
@@ -668,11 +673,11 @@ void StencilApp::BuildDescriptorHeaps()
 	md3dDevice->CreateShaderResourceView(bricksTex.Get(), &srvDesc, hDescriptor);
 
 	// next descriptor
-#ifndef EX5
+#ifndef EX5_NO_FLOOR
 	hDescriptor.Offset(1, mCbvSrvDescriptorSize);
 	srvDesc.Format = checkboardTex->GetDesc().Format;
 	md3dDevice->CreateShaderResourceView(checkboardTex.Get(), &srvDesc, hDescriptor);
-#endif // EX5
+#endif // EX5_NO_FLOOR
 
 	// next descriptor
 	hDescriptor.Offset(1, mCbvSrvDescriptorSize);
@@ -716,7 +721,7 @@ void StencilApp::BuildShadersAndInputLayout()
 
 void StencilApp::BuildRoomGeometry()
 {
-    	// Create and specify geometry.  For this sample we draw a floor
+    // Create and specify geometry.  For this sample we draw a floor
 	// and a wall with a mirror on it.  We put the floor, wall, and
 	// mirror geometry in one vertex buffer.
 	//
@@ -1078,7 +1083,7 @@ void StencilApp::BuildMaterials()
 	bricks->FresnelR0 = XMFLOAT3(0.05f, 0.05f, 0.05f);
 	bricks->Roughness = 0.25f;
 
-#ifndef EX5
+#ifndef EX5_NO_FLOOR
 	auto checkertile = std::make_unique<Material>();
 	checkertile->Name = "checkertile";
 	checkertile->MatCBIndex = currentMatCBIndex++;
@@ -1087,7 +1092,7 @@ void StencilApp::BuildMaterials()
 	checkertile->FresnelR0 = XMFLOAT3(0.07f, 0.07f, 0.07f);
 	checkertile->Roughness = 0.3f;
 	mMaterials["checkertile"] = std::move(checkertile);
-#endif // EX5
+#endif // EX5_NO_FLOOR
 
 	auto icemirror = std::make_unique<Material>();
 	icemirror->Name = "icemirror";
@@ -1121,7 +1126,7 @@ void StencilApp::BuildMaterials()
 
 void StencilApp::BuildRenderItems()
 {
-#ifndef EX5
+#ifndef EX5_NO_FLOOR
 	auto floorRitem = std::make_unique<RenderItem>();
 	floorRitem->World = MathHelper::Identity4x4();
 	floorRitem->TexTransform = MathHelper::Identity4x4();
@@ -1133,12 +1138,16 @@ void StencilApp::BuildRenderItems()
 	floorRitem->StartIndexLocation = floorRitem->Geo->DrawArgs["floor"].StartIndexLocation;
 	floorRitem->BaseVertexLocation = floorRitem->Geo->DrawArgs["floor"].BaseVertexLocation;
 	mRitemLayer[(int)RenderLayer::Opaque].push_back(floorRitem.get());
-#endif // !EX5
+#endif // !EX5_NO_FLOOR
 
     auto wallsRitem = std::make_unique<RenderItem>();
 	wallsRitem->World = MathHelper::Identity4x4();
 	wallsRitem->TexTransform = MathHelper::Identity4x4();
+#if defined(EX5_NO_FLOOR)
+	wallsRitem->ObjCBIndex = 0;
+#else
 	wallsRitem->ObjCBIndex = 1;
+#endif
 	wallsRitem->Mat = mMaterials["bricks"].get();
 	wallsRitem->Geo = mGeometries["roomGeo"].get();
 	wallsRitem->PrimitiveType = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
@@ -1150,7 +1159,11 @@ void StencilApp::BuildRenderItems()
 	auto skullRitem = std::make_unique<RenderItem>();
 	skullRitem->World = MathHelper::Identity4x4();
 	skullRitem->TexTransform = MathHelper::Identity4x4();
+#if defined(EX5_NO_FLOOR)
+	skullRitem->ObjCBIndex = 1;
+#else
 	skullRitem->ObjCBIndex = 2;
+#endif
 	skullRitem->Mat = mMaterials["skullMat"].get();
 	skullRitem->Geo = mGeometries["skullGeo"].get();
 	skullRitem->PrimitiveType = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
@@ -1163,14 +1176,22 @@ void StencilApp::BuildRenderItems()
 	// Reflected skull will have different world matrix, so it needs to be its own render item.
 	auto reflectedSkullRitem = std::make_unique<RenderItem>();
 	*reflectedSkullRitem = *skullRitem;
+#if defined(EX5_NO_FLOOR)
+	reflectedSkullRitem->ObjCBIndex = 2;
+#else
 	reflectedSkullRitem->ObjCBIndex = 3;
+#endif
 	mReflectedSkullRitem = reflectedSkullRitem.get();
 	mRitemLayer[(int)RenderLayer::Reflected].push_back(reflectedSkullRitem.get());
 
 	// Shadowed skull will have different world matrix, so it needs to be its own render item.
 	auto shadowedSkullRitem = std::make_unique<RenderItem>();
 	*shadowedSkullRitem = *skullRitem;
+#if defined(EX5_NO_FLOOR)
+	shadowedSkullRitem->ObjCBIndex = 3;
+#else
 	shadowedSkullRitem->ObjCBIndex = 4;
+#endif
 	shadowedSkullRitem->Mat = mMaterials["shadowMat"].get();
 	mShadowedSkullRitem = shadowedSkullRitem.get();
 	mRitemLayer[(int)RenderLayer::Shadow].push_back(shadowedSkullRitem.get());
@@ -1178,7 +1199,11 @@ void StencilApp::BuildRenderItems()
 	auto mirrorRitem = std::make_unique<RenderItem>();
 	mirrorRitem->World = MathHelper::Identity4x4();
 	mirrorRitem->TexTransform = MathHelper::Identity4x4();
+#if defined(EX5_NO_FLOOR)
+	mirrorRitem->ObjCBIndex = 4;
+#else
 	mirrorRitem->ObjCBIndex = 5;
+#endif
 	mirrorRitem->Mat = mMaterials["icemirror"].get();
 	mirrorRitem->Geo = mGeometries["roomGeo"].get();
 	mirrorRitem->PrimitiveType = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
@@ -1188,9 +1213,9 @@ void StencilApp::BuildRenderItems()
 	mRitemLayer[(int)RenderLayer::Mirrors].push_back(mirrorRitem.get());
 	mRitemLayer[(int)RenderLayer::Transparent].push_back(mirrorRitem.get());
 
-#ifndef EX5
+#ifndef EX5_NO_FLOOR
 	mAllRitems.push_back(std::move(floorRitem));
-#endif // !EX5
+#endif // !EX5_NO_FLOOR
 	mAllRitems.push_back(std::move(skullRitem));
 	mAllRitems.push_back(std::move(wallsRitem));
 	mAllRitems.push_back(std::move(reflectedSkullRitem));
