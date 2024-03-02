@@ -10,8 +10,9 @@
 
 //#define EX3
 //#define EX4
-#define EX5_NO_FLOOR // no need for solving the exercise problem, but I just want to make the floor disappears
-#define EX5
+//#define EX5_NO_FLOOR // no need for solving the exercise problem, but I just want to make the floor disappears
+//#define EX5
+//#define EX6
 
 using Microsoft::WRL::ComPtr;
 using namespace DirectX;
@@ -63,6 +64,10 @@ enum class RenderLayer : int
 	Reflected,
 	Transparent,
 	Shadow,
+#ifdef EX5
+	Wall,
+	Skull,
+#endif
 	Count
 };
 
@@ -267,7 +272,11 @@ void StencilApp::Draw(const GameTimer& gt)
 
     // A command list can be reset after it has been added to the command queue via ExecuteCommandList.
     // Reusing the command list reuses memory.
+#if defined(EX5)
+	ThrowIfFailed(mCommandList->Reset(cmdListAlloc.Get(), mPSOs["wall"].Get()));
+#else
     ThrowIfFailed(mCommandList->Reset(cmdListAlloc.Get(), mPSOs["opaque"].Get()));
+#endif // EX5
 
     mCommandList->RSSetViewports(1, &mScreenViewport);
     mCommandList->RSSetScissorRects(1, &mScissorRect);
@@ -293,7 +302,14 @@ void StencilApp::Draw(const GameTimer& gt)
 	// Draw opaque items--floors, walls, skull.
 	auto passCB = mCurrFrameResource->PassCB->Resource();
 	mCommandList->SetGraphicsRootConstantBufferView(2, passCB->GetGPUVirtualAddress());
+
+#if defined(EX5)
+	DrawRenderItems(mCommandList.Get(), mRitemLayer[(int)RenderLayer::Wall]);
+	mCommandList->SetPipelineState(mPSOs["skull"].Get());
+	DrawRenderItems(mCommandList.Get(), mRitemLayer[(int)RenderLayer::Skull]);
+#else
     DrawRenderItems(mCommandList.Get(), mRitemLayer[(int)RenderLayer::Opaque]);
+#endif
 	
 	// Mark the visible mirror pixels in the stencil buffer with the value 1
 	mCommandList->OMSetStencilRef(1);
@@ -400,10 +416,16 @@ void StencilApp::OnKeyboardInput(const GameTimer& gt)
 		mSkullTranslation.x += 1.0f*dt;
 
 	if(GetAsyncKeyState('W') & 0x8000)
-		mSkullTranslation.y += 1.0f*dt;
+		mSkullTranslation.z += 1.0f*dt;
 
 	if(GetAsyncKeyState('S') & 0x8000)
-		mSkullTranslation.y -= 1.0f*dt;
+		mSkullTranslation.z -= 1.0f*dt;
+
+	if (GetAsyncKeyState('Q') & 0x8000)
+		mSkullTranslation.y += 1.0f * dt;
+
+	if (GetAsyncKeyState('E') & 0x8000)
+		mSkullTranslation.y -= 1.0f * dt;
 
 	// Don't let user move below ground plane.
 	mSkullTranslation.y = MathHelper::Max(mSkullTranslation.y, 0.0f);
@@ -543,7 +565,7 @@ void StencilApp::UpdateReflectedPassCB(const GameTimer& gt)
 {
 	mReflectedPassCB = mMainPassCB;
 
-	XMVECTOR mirrorPlane = XMVectorSet(0.0f, 0.0f, 1.0f, 0.0f); // xy plane
+	XMVECTOR mirrorPlane = XMVectorSet(0.0f, 0.0f, 1.0f, 0.0f); // xy plane, reverse from mirror facing direction
 	XMMATRIX R = XMMatrixReflect(mirrorPlane);
 
 	// Reflect the lighting.
@@ -942,6 +964,55 @@ void StencilApp::BuildPSOs()
 	opaquePsoDesc.DSVFormat = mDepthStencilFormat;
     ThrowIfFailed(md3dDevice->CreateGraphicsPipelineState(&opaquePsoDesc, IID_PPV_ARGS(&mPSOs["opaque"])));
 
+#if defined(EX5)
+	D3D12_DEPTH_STENCIL_DESC wallDSS;
+	//wallDSS.DepthEnable = false; // with this setting, depth check of wall will disable, so the skull can be seen even it behinds the wall
+	wallDSS.DepthEnable = true; // although with setting to true, the skull will not be seen
+	wallDSS.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
+	wallDSS.DepthFunc = D3D12_COMPARISON_FUNC_LESS;
+	wallDSS.StencilEnable = true;
+	wallDSS.StencilReadMask = 0xff;
+	wallDSS.StencilWriteMask = 0xff;
+
+	wallDSS.FrontFace.StencilFailOp = D3D12_STENCIL_OP_KEEP;
+	wallDSS.FrontFace.StencilDepthFailOp = D3D12_STENCIL_OP_KEEP;
+	wallDSS.FrontFace.StencilPassOp = D3D12_STENCIL_OP_REPLACE;
+	wallDSS.FrontFace.StencilFunc = D3D12_COMPARISON_FUNC_ALWAYS;
+
+	// We are not rendering backfacing polygons, so these settings do not matter.
+	wallDSS.BackFace.StencilFailOp = D3D12_STENCIL_OP_KEEP;
+	wallDSS.BackFace.StencilDepthFailOp = D3D12_STENCIL_OP_KEEP;
+	wallDSS.BackFace.StencilPassOp = D3D12_STENCIL_OP_REPLACE;
+	wallDSS.BackFace.StencilFunc = D3D12_COMPARISON_FUNC_ALWAYS;
+	
+	D3D12_DEPTH_STENCIL_DESC skullDSS = wallDSS;
+	skullDSS.DepthEnable = true;
+
+	D3D12_GRAPHICS_PIPELINE_STATE_DESC wallPsoDesc = opaquePsoDesc;
+	wallPsoDesc.DepthStencilState = wallDSS;
+	
+	// play around: make wall transparent to see if it can reflects the skull (answer it no because of no stencil buffer)
+	// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+	/*D3D12_RENDER_TARGET_BLEND_DESC wallTransBlendDesc;
+	wallTransBlendDesc.BlendEnable = true;
+	wallTransBlendDesc.LogicOpEnable = false;
+	wallTransBlendDesc.SrcBlend = D3D12_BLEND_SRC_ALPHA;
+	wallTransBlendDesc.DestBlend = D3D12_BLEND_INV_SRC_ALPHA;
+	wallTransBlendDesc.BlendOp = D3D12_BLEND_OP_ADD;
+	wallTransBlendDesc.SrcBlendAlpha = D3D12_BLEND_ONE;
+	wallTransBlendDesc.DestBlendAlpha = D3D12_BLEND_ZERO;
+	wallTransBlendDesc.BlendOpAlpha = D3D12_BLEND_OP_ADD;
+	wallTransBlendDesc.LogicOp = D3D12_LOGIC_OP_NOOP;
+	wallTransBlendDesc.RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
+	wallPsoDesc.BlendState.RenderTarget[0] = wallTransBlendDesc;*/
+	// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+	
+	D3D12_GRAPHICS_PIPELINE_STATE_DESC skullPsoDesc = opaquePsoDesc;
+	skullPsoDesc.DepthStencilState = skullDSS;
+
+	ThrowIfFailed(md3dDevice->CreateGraphicsPipelineState(&wallPsoDesc, IID_PPV_ARGS(&mPSOs["wall"])));
+	ThrowIfFailed(md3dDevice->CreateGraphicsPipelineState(&skullPsoDesc, IID_PPV_ARGS(&mPSOs["skull"])));
+#endif
 	//
 	// PSO for transparent objects
 	//
@@ -968,11 +1039,12 @@ void StencilApp::BuildPSOs()
 	//
 
 	CD3DX12_BLEND_DESC mirrorBlendState(D3D12_DEFAULT);
+	// disable color writes to the back buffer
 	mirrorBlendState.RenderTarget[0].RenderTargetWriteMask = 0;
 
 	D3D12_DEPTH_STENCIL_DESC mirrorDSS;
 	mirrorDSS.DepthEnable = true;
-	mirrorDSS.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
+	mirrorDSS.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO; // disable writes to the depth buffer
 	mirrorDSS.DepthFunc = D3D12_COMPARISON_FUNC_LESS;
 	mirrorDSS.StencilEnable = true;
 	mirrorDSS.StencilReadMask = 0xff;
@@ -980,7 +1052,7 @@ void StencilApp::BuildPSOs()
 	
 	mirrorDSS.FrontFace.StencilFailOp = D3D12_STENCIL_OP_KEEP;
 	mirrorDSS.FrontFace.StencilDepthFailOp = D3D12_STENCIL_OP_KEEP;
-	mirrorDSS.FrontFace.StencilPassOp = D3D12_STENCIL_OP_REPLACE;
+	mirrorDSS.FrontFace.StencilPassOp = D3D12_STENCIL_OP_REPLACE; // replaced with stencil ref value, which is 1 in this demo
 	mirrorDSS.FrontFace.StencilFunc = D3D12_COMPARISON_FUNC_ALWAYS;
 
 	// We are not rendering backfacing polygons, so these settings do not matter.
@@ -1010,10 +1082,12 @@ void StencilApp::BuildPSOs()
 	reflectionsDSS.FrontFace.StencilDepthFailOp = D3D12_STENCIL_OP_KEEP;
 	reflectionsDSS.FrontFace.StencilPassOp = D3D12_STENCIL_OP_KEEP;
 #if defined(EX3)
-	// always return true even one check fail
+	// always return true even one check fail, which makes skull be rendered behind the wall
 	reflectionsDSS.FrontFace.StencilFunc = D3D12_COMPARISON_FUNC_ALWAYS;
 #else
-	reflectionsDSS.FrontFace.StencilFunc = D3D12_COMPARISON_FUNC_EQUAL;
+	// we only render the pixel that pass the stencil test, this time, we set the stencil test to only succeed if the value 
+	// in the stencil buffer equals to 1
+	reflectionsDSS.FrontFace.StencilFunc = D3D12_COMPARISON_FUNC_EQUAL; 
 #endif // EX3
 
 	// We are not rendering backfacing polygons, so these settings do not matter.
@@ -1025,7 +1099,21 @@ void StencilApp::BuildPSOs()
 	D3D12_GRAPHICS_PIPELINE_STATE_DESC drawReflectionsPsoDesc = opaquePsoDesc;
 	drawReflectionsPsoDesc.DepthStencilState = reflectionsDSS;
 	drawReflectionsPsoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_BACK;
+#if defined(EX6)
+	// by doing this, mirrow cannot reflect the skull properly, becuase mirrow should render the back of the mesh, which should set
+	// FrontCounterClockwise = true in order to keep the triangles on the back from be culled.
+	// with FrontCounterClockwise = false, the internal of the mesh and the "front" toward to the camera will be reflect on the mirror
+	drawReflectionsPsoDesc.RasterizerState.FrontCounterClockwise = false;
+#else
 	drawReflectionsPsoDesc.RasterizerState.FrontCounterClockwise = true;
+	
+	// NOTE: set as following could also achieve the right results:
+	/*
+	drawReflectionsPsoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_FRONT;
+	drawReflectionsPsoDesc.RasterizerState.FrontCounterClockwise = false;
+	*/
+#endif
+
 	ThrowIfFailed(md3dDevice->CreateGraphicsPipelineState(&drawReflectionsPsoDesc, IID_PPV_ARGS(&mPSOs["drawStencilReflections"])));
 
 	//
@@ -1047,7 +1135,7 @@ void StencilApp::BuildPSOs()
 #if defined(EX4)
 	shadowDSS.FrontFace.StencilFunc = D3D12_COMPARISON_FUNC_ALWAYS;
 #else
-	shadowDSS.FrontFace.StencilFunc = D3D12_COMPARISON_FUNC_EQUAL;
+	shadowDSS.FrontFace.StencilFunc = D3D12_COMPARISON_FUNC_EQUAL; // when pixel stencil test pass (== 0), increase it so it not == 0 to prevent double blending
 #endif
 
 	// We are not rendering backfacing polygons, so these settings do not matter.
@@ -1079,7 +1167,7 @@ void StencilApp::BuildMaterials()
 	bricks->Name = "bricks";
 	bricks->MatCBIndex = currentMatCBIndex++;
 	bricks->DiffuseSrvHeapIndex = currentDiffuseSrvHeapIndex++;
-	bricks->DiffuseAlbedo = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
+	bricks->DiffuseAlbedo = XMFLOAT4(1.0f, 1.0f, 1.0f, 0.3f);
 	bricks->FresnelR0 = XMFLOAT3(0.05f, 0.05f, 0.05f);
 	bricks->Roughness = 0.25f;
 
@@ -1154,10 +1242,22 @@ void StencilApp::BuildRenderItems()
 	wallsRitem->IndexCount = wallsRitem->Geo->DrawArgs["wall"].IndexCount;
 	wallsRitem->StartIndexLocation = wallsRitem->Geo->DrawArgs["wall"].StartIndexLocation;
 	wallsRitem->BaseVertexLocation = wallsRitem->Geo->DrawArgs["wall"].BaseVertexLocation;
+#if defined (EX5)
+	mRitemLayer[(int)RenderLayer::Wall].push_back(wallsRitem.get());
+	
+	XMFLOAT3 translation(1000.0f, 500.0f, 300.0f); // why translation does not work?
+	XMMATRIX translationMatrix = XMMatrixTranslation(translation.x, translation.y, translation.z);
+	XMMATRIX result = XMMatrixIdentity() * translationMatrix;
+#else
 	mRitemLayer[(int)RenderLayer::Opaque].push_back(wallsRitem.get());
+#endif
 
 	auto skullRitem = std::make_unique<RenderItem>();
 	skullRitem->World = MathHelper::Identity4x4();
+#ifdef EX5
+	XMStoreFloat4x4(&skullRitem->World, result);
+#endif // EX5
+
 	skullRitem->TexTransform = MathHelper::Identity4x4();
 #if defined(EX5_NO_FLOOR)
 	skullRitem->ObjCBIndex = 1;
@@ -1171,7 +1271,11 @@ void StencilApp::BuildRenderItems()
 	skullRitem->StartIndexLocation = skullRitem->Geo->DrawArgs["skull"].StartIndexLocation;
 	skullRitem->BaseVertexLocation = skullRitem->Geo->DrawArgs["skull"].BaseVertexLocation;
 	mSkullRitem = skullRitem.get();
+#if defined (EX5)
+	mRitemLayer[(int)RenderLayer::Skull].push_back(skullRitem.get());
+#else
 	mRitemLayer[(int)RenderLayer::Opaque].push_back(skullRitem.get());
+#endif
 
 	// Reflected skull will have different world matrix, so it needs to be its own render item.
 	auto reflectedSkullRitem = std::make_unique<RenderItem>();
