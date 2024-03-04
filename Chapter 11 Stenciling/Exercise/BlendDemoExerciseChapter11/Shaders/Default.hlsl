@@ -17,7 +17,8 @@
     #define NUM_SPOT_LIGHTS 0
 #endif
 
-#define EX8
+//#define EX8
+#define EX9
 
 // Include structures and functions for lighting.
 #include "LightingUtil.hlsl"
@@ -120,6 +121,9 @@ float4 PS(VertexOut pin) : SV_Target
 {
 #if defined(EX8)
     float4 col = { 1, 1, 1, 1 };
+    return col;
+#elif defined(EX9)
+    float4 col = { 0.05, 0.05, 0.05, 1 };
     return col;
 #else
     float4 diffuseAlbedo = gDiffuseMap.Sample(gsamAnisotropicWrap, pin.TexC) * gDiffuseAlbedo;

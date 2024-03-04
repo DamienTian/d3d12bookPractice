@@ -12,7 +12,8 @@
 #include "Waves.h"
 
 //#define EX7 // not finished: don't understand the question
-#define EX8 // ref: https://zhuanlan.zhihu.com/p/225446279
+//#define EX8 // ref: https://zhuanlan.zhihu.com/p/225446279
+#define EX9
 
 using Microsoft::WRL::ComPtr;
 using namespace DirectX;
@@ -110,10 +111,6 @@ private:
 
     float GetHillsHeight(float x, float z)const;
     XMFLOAT3 GetHillsNormal(float x, float z)const;
-
-#ifdef EX8
-	int ColorComplexity(XMFLOAT4 color);
-#endif // EX8
 
 private:
 
@@ -285,7 +282,7 @@ void BlendApp::Draw(const GameTimer& gt)
 		D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET));
 
     // Clear the back buffer and depth buffer.
-#if defined(EX8)
+#if defined(EX8) || defined(EX9)
     mCommandList->ClearRenderTargetView(CurrentBackBufferView(), DirectX::Colors::Black, 0, nullptr);
 #else
     mCommandList->ClearRenderTargetView(CurrentBackBufferView(), (float*)&mMainPassCB.FogColor, 0, nullptr);
@@ -334,7 +331,10 @@ void BlendApp::Draw(const GameTimer& gt)
 	DrawRenderItems(mCommandList.Get(), mRitemLayer[(int)RenderLayer::Opaque]);
 	DrawRenderItems(mCommandList.Get(), mRitemLayer[(int)RenderLayer::AlphaTested]);
 	DrawRenderItems(mCommandList.Get(), mRitemLayer[(int)RenderLayer::Transparent]);
-
+#elif defined(EX9)
+	DrawRenderItems(mCommandList.Get(), mRitemLayer[(int)RenderLayer::Opaque]);
+	DrawRenderItems(mCommandList.Get(), mRitemLayer[(int)RenderLayer::AlphaTested]);
+	DrawRenderItems(mCommandList.Get(), mRitemLayer[(int)RenderLayer::Transparent]);
 #else
     DrawRenderItems(mCommandList.Get(), mRitemLayer[(int)RenderLayer::Opaque]);
 
@@ -344,6 +344,7 @@ void BlendApp::Draw(const GameTimer& gt)
 	mCommandList->SetPipelineState(mPSOs["transparent"].Get());
 	DrawRenderItems(mCommandList.Get(), mRitemLayer[(int)RenderLayer::Transparent]);
 #endif // EX8
+
     // Indicate a state transition on the resource usage.
 	mCommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(CurrentBackBuffer(),
 		D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT));
@@ -1037,7 +1038,21 @@ void BlendApp::BuildPSOs()
 	D3D12_GRAPHICS_PIPELINE_STATE_DESC depthComplexityPsoDesc4 = depthComplexityPsoDesc1;
 	depthComplexityPsoDesc4.BlendState.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
 	ThrowIfFailed(md3dDevice->CreateGraphicsPipelineState(&depthComplexityPsoDesc4, IID_PPV_ARGS(&mPSOs["depthComplexity4"])));
-#endif // EX8
+#elif defined(EX9)
+	D3D12_RENDER_TARGET_BLEND_DESC opaqueBlendDesc;
+	opaqueBlendDesc.BlendEnable = true;
+	opaqueBlendDesc.LogicOpEnable = false;
+	opaqueBlendDesc.SrcBlend = D3D12_BLEND_ONE;
+	opaqueBlendDesc.DestBlend = D3D12_BLEND_ONE;
+	opaqueBlendDesc.BlendOp = D3D12_BLEND_OP_ADD;
+	opaqueBlendDesc.SrcBlendAlpha = D3D12_BLEND_ONE;
+	opaqueBlendDesc.DestBlendAlpha = D3D12_BLEND_ZERO;
+	opaqueBlendDesc.BlendOpAlpha = D3D12_BLEND_OP_ADD;
+	opaqueBlendDesc.LogicOp = D3D12_LOGIC_OP_NOOP;
+	opaqueBlendDesc.RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
+
+	opaquePsoDesc.BlendState.RenderTarget[0] = opaqueBlendDesc;
+#endif // EX8 EX9
 
     ThrowIfFailed(md3dDevice->CreateGraphicsPipelineState(&opaquePsoDesc, IID_PPV_ARGS(&mPSOs["opaque"])));
 
@@ -1050,8 +1065,13 @@ void BlendApp::BuildPSOs()
 	D3D12_RENDER_TARGET_BLEND_DESC transparencyBlendDesc;
 	transparencyBlendDesc.BlendEnable = true;
 	transparencyBlendDesc.LogicOpEnable = false;
+#if defined(EX9)
+	transparencyBlendDesc.SrcBlend = D3D12_BLEND_ONE;
+	transparencyBlendDesc.DestBlend = D3D12_BLEND_ONE;
+#else
 	transparencyBlendDesc.SrcBlend = D3D12_BLEND_SRC_ALPHA;
 	transparencyBlendDesc.DestBlend = D3D12_BLEND_INV_SRC_ALPHA;
+#endif
 	transparencyBlendDesc.BlendOp = D3D12_BLEND_OP_ADD;
 	transparencyBlendDesc.SrcBlendAlpha = D3D12_BLEND_ONE;
 	transparencyBlendDesc.DestBlendAlpha = D3D12_BLEND_ZERO;

@@ -13,6 +13,8 @@
 //#define EX5_NO_FLOOR // no need for solving the exercise problem, but I just want to make the floor disappears
 //#define EX5
 //#define EX6
+#define EX11 // floor and shadow reflections
+//#define EX12
 
 using Microsoft::WRL::ComPtr;
 using namespace DirectX;
@@ -67,6 +69,8 @@ enum class RenderLayer : int
 #ifdef EX5
 	Wall,
 	Skull,
+#elif defined(EX11)
+	ReflectedShadow,
 #endif
 	Count
 };
@@ -136,6 +140,9 @@ private:
 	RenderItem* mSkullRitem = nullptr;
 	RenderItem* mReflectedSkullRitem = nullptr;
 	RenderItem* mShadowedSkullRitem = nullptr;
+#ifdef EX11
+	RenderItem* mReflectedShadowedSkullRitem = nullptr;
+#endif
 
 	// List of all the render items.
 	std::vector<std::unique_ptr<RenderItem>> mAllRitems;
@@ -322,6 +329,11 @@ void StencilApp::Draw(const GameTimer& gt)
 	mCommandList->SetPipelineState(mPSOs["drawStencilReflections"].Get());
 	DrawRenderItems(mCommandList.Get(), mRitemLayer[(int)RenderLayer::Reflected]);
 
+#ifdef EX11
+	mCommandList->SetPipelineState(mPSOs["reflectedShadow"].Get());
+	DrawRenderItems(mCommandList.Get(), mRitemLayer[(int)RenderLayer::ReflectedShadow]);
+#endif // EX11
+
 	// Restore main pass constants and stencil ref.
 	mCommandList->SetGraphicsRootConstantBufferView(2, passCB->GetGPUVirtualAddress());
 	mCommandList->OMSetStencilRef(0);
@@ -446,8 +458,20 @@ void StencilApp::OnKeyboardInput(const GameTimer& gt)
 	XMVECTOR shadowPlane = XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f); // xz plane
 	XMVECTOR toMainLight = -XMLoadFloat3(&mMainPassCB.Lights[0].Direction);
 	XMMATRIX S = XMMatrixShadow(shadowPlane, toMainLight);
+#ifdef EX12
+	XMStoreFloat4x4(&mShadowedSkullRitem->World, skullWorld * S);
+#else
 	XMMATRIX shadowOffsetY = XMMatrixTranslation(0.0f, 0.001f, 0.0f);
 	XMStoreFloat4x4(&mShadowedSkullRitem->World, skullWorld * S * shadowOffsetY);
+#endif // EX12
+
+	
+
+#ifdef EX11
+	// Update reflected shadow world matrix.
+	XMStoreFloat4x4(&mReflectedShadowedSkullRitem->World, XMLoadFloat4x4(&mShadowedSkullRitem->World) * R);
+	mReflectedShadowedSkullRitem->NumFramesDirty = gNumFrameResources;
+#endif // EX11
 
 	mSkullRitem->NumFramesDirty = gNumFrameResources;
 	mReflectedSkullRitem->NumFramesDirty = gNumFrameResources;
@@ -1013,6 +1037,7 @@ void StencilApp::BuildPSOs()
 	ThrowIfFailed(md3dDevice->CreateGraphicsPipelineState(&wallPsoDesc, IID_PPV_ARGS(&mPSOs["wall"])));
 	ThrowIfFailed(md3dDevice->CreateGraphicsPipelineState(&skullPsoDesc, IID_PPV_ARGS(&mPSOs["skull"])));
 #endif
+
 	//
 	// PSO for transparent objects
 	//
@@ -1147,6 +1172,34 @@ void StencilApp::BuildPSOs()
 	D3D12_GRAPHICS_PIPELINE_STATE_DESC shadowPsoDesc = transparentPsoDesc;
 	shadowPsoDesc.DepthStencilState = shadowDSS;
 	ThrowIfFailed(md3dDevice->CreateGraphicsPipelineState(&shadowPsoDesc, IID_PPV_ARGS(&mPSOs["shadow"])));
+
+#ifdef EX11
+	//
+	// PSO for reflected shadow object
+	//
+	D3D12_DEPTH_STENCIL_DESC reflectedShadowDSS;
+	reflectedShadowDSS.DepthEnable = true;
+	reflectedShadowDSS.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
+	reflectedShadowDSS.DepthFunc = D3D12_COMPARISON_FUNC_LESS;
+	reflectedShadowDSS.StencilEnable = true;
+	reflectedShadowDSS.StencilReadMask = 0xff;
+	reflectedShadowDSS.StencilWriteMask = 0xff;
+
+	reflectedShadowDSS.FrontFace.StencilFailOp = D3D12_STENCIL_OP_KEEP;
+	reflectedShadowDSS.FrontFace.StencilDepthFailOp = D3D12_STENCIL_OP_KEEP;
+	reflectedShadowDSS.FrontFace.StencilPassOp = D3D12_STENCIL_OP_INCR;
+	reflectedShadowDSS.FrontFace.StencilFunc = D3D12_COMPARISON_FUNC_EQUAL;
+	// We are not rendering backfacing polygons, so these settings do not matter.
+	reflectedShadowDSS.BackFace.StencilFailOp = D3D12_STENCIL_OP_KEEP;
+	reflectedShadowDSS.BackFace.StencilDepthFailOp = D3D12_STENCIL_OP_KEEP;
+	reflectedShadowDSS.BackFace.StencilPassOp = D3D12_STENCIL_OP_INCR;
+	reflectedShadowDSS.BackFace.StencilFunc = D3D12_COMPARISON_FUNC_EQUAL;
+
+	D3D12_GRAPHICS_PIPELINE_STATE_DESC reflectedShadowPsoDesc = transparentPsoDesc;
+	reflectedShadowPsoDesc.DepthStencilState = reflectedShadowDSS;
+	reflectedShadowPsoDesc.BlendState.RenderTarget[0] = transparencyBlendDesc;
+	ThrowIfFailed(md3dDevice->CreateGraphicsPipelineState(&reflectedShadowPsoDesc, IID_PPV_ARGS(&mPSOs["reflectedShadow"])));
+#endif // EX11
 }
 
 void StencilApp::BuildFrameResources()
@@ -1316,6 +1369,29 @@ void StencilApp::BuildRenderItems()
 	mirrorRitem->BaseVertexLocation = mirrorRitem->Geo->DrawArgs["mirror"].BaseVertexLocation;
 	mRitemLayer[(int)RenderLayer::Mirrors].push_back(mirrorRitem.get());
 	mRitemLayer[(int)RenderLayer::Transparent].push_back(mirrorRitem.get());
+
+#ifdef EX11
+	// Add a reflected floor into the reflected layer
+	auto reflectedFloorRitem = std::make_unique<RenderItem>();
+	*reflectedFloorRitem = *floorRitem;
+
+	// since floor will not change the position, let reflected it here 
+	XMVECTOR mirrorPlane = XMVectorSet(0.0f, 0.0f, 1.0f, 0.0f); // xy plane
+	XMMATRIX R = XMMatrixReflect(mirrorPlane);
+	XMStoreFloat4x4(&reflectedFloorRitem->World, R);
+
+	reflectedFloorRitem->ObjCBIndex = 6;
+	mRitemLayer[(int)RenderLayer::Reflected].push_back(reflectedFloorRitem.get());
+	mAllRitems.push_back(std::move(reflectedFloorRitem));
+
+	// Add a reflected shadow into a new layer: reflected shadow layer
+	auto reflectedShadowRitem = std::make_unique<RenderItem>();
+	*reflectedShadowRitem = *shadowedSkullRitem;
+	reflectedShadowRitem->ObjCBIndex = 7;
+	mReflectedShadowedSkullRitem = reflectedShadowRitem.get();
+	mRitemLayer[(int)RenderLayer::ReflectedShadow].push_back(reflectedShadowRitem.get());
+	mAllRitems.push_back(std::move(reflectedShadowRitem));
+#endif // EX11
 
 #ifndef EX5_NO_FLOOR
 	mAllRitems.push_back(std::move(floorRitem));
