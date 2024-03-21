@@ -325,6 +325,37 @@ GeometryGenerator::MeshData GeometryGenerator::CreateMeshFromTxtFile(std::string
 	return meshData;
 }
 
+GeometryGenerator::MeshData GeometryGenerator::CreateXZCircleByLineStrip(float radius, uint32 sliceCount)
+{
+	MeshData meshData;
+
+	// vertices of circle
+	float dTheta = 2.0f * XM_PI / sliceCount;
+	for (uint32 i = 0; i <= sliceCount; ++i)
+	{
+		Vertex vertex;
+
+		float c = cosf(i * dTheta);
+		float s = sinf(i * dTheta);
+
+		vertex.Position = XMFLOAT3(radius * c, 0.0f, radius * s);
+
+		vertex.TexC.x = (float)i / sliceCount;
+
+		vertex.TangentU = XMFLOAT3(-s, 0.0f, c);
+
+		meshData.Vertices.push_back(vertex);
+	}
+
+	// connect all vertices as a line strip
+	for (uint32 i = 0; i <= sliceCount; ++i)
+	{
+		meshData.Indices32.push_back(i);
+	}
+
+	return meshData;
+}
+
 void GeometryGenerator::Subdivide(MeshData& meshData)
 {
 	// Save a copy of the input geometry.

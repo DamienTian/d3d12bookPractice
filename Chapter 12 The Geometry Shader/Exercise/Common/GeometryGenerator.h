@@ -112,9 +112,14 @@ public:
     MeshData CreateQuad(float x, float y, float w, float h, float depth);
 
 	///<summary>
-	/// Creates a mesh by reading the model file (study model skull.txt)
+	/// Creates a mesh by reading the model file (study model skull.txt for Chapter 7 Exercise 3)
 	///</summary>
 	MeshData CreateMeshFromTxtFile(std::string fileName);
+
+	///<summary>
+	/// Creates a circle on XZ plane by line strip, follow the algorithm from function CreateCylinder (for Chapter 12 Exercise 1)
+	///</summary>
+	MeshData CreateXZCircleByLineStrip(float radius, uint32 sliceCount);
 
 private:
 	void Subdivide(MeshData& meshData);
