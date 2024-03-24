@@ -307,8 +307,10 @@ void TreeBillboardsApp::Draw(const GameTimer& gt)
 	mCommandList->SetPipelineState(mPSOs["alphaTested"].Get());
 	DrawRenderItems(mCommandList.Get(), mRitemLayer[(int)RenderLayer::AlphaTested]);
 
+#ifndef EX1 // erase the tree sprite because I overridden the GS
 	mCommandList->SetPipelineState(mPSOs["treeSprites"].Get());
 	DrawRenderItems(mCommandList.Get(), mRitemLayer[(int)RenderLayer::AlphaTestedTreeSprites]);
+#endif
 
 	mCommandList->SetPipelineState(mPSOs["transparent"].Get());
 	DrawRenderItems(mCommandList.Get(), mRitemLayer[(int)RenderLayer::Transparent]);
@@ -883,19 +885,24 @@ void TreeBillboardsApp::BuildBoxGeometry()
 #ifdef EX1
 void TreeBillboardsApp::BuildXYCircleGeometry()
 {
-	GeometryGenerator geoGen;
-	GeometryGenerator::MeshData circle = geoGen.CreateXZCircleByLineStrip(5.0f, 20);
+	struct CircleSpriteVertex
+	{
+		XMFLOAT3 Pos;
+		XMFLOAT2 Size;
+	};
 
-	std::vector<Vertex> vertices(circle.Vertices.size());
+	GeometryGenerator geoGen;
+	GeometryGenerator::MeshData circle = geoGen.CreateXZCircleByLineStrip(3.0f, 20);
+
+	std::vector<CircleSpriteVertex> vertices(circle.Vertices.size());
 	for (size_t i = 0; i < circle.Vertices.size(); ++i)
 	{
 		auto& p = circle.Vertices[i].Position;
 		vertices[i].Pos = p;
-		vertices[i].Normal = circle.Vertices[i].Normal;
-		vertices[i].TexC = circle.Vertices[i].TexC;
+		vertices[i].Size = XMFLOAT2(0.0f, 0.0f);
 	}
 
-	const UINT vbByteSize = (UINT)vertices.size() * sizeof(Vertex);
+	const UINT vbByteSize = (UINT)vertices.size() * sizeof(CircleSpriteVertex);
 
 	std::vector<std::uint16_t> indices = circle.GetIndices16();
 	const UINT ibByteSize = (UINT)indices.size() * sizeof(std::uint16_t);
@@ -915,7 +922,7 @@ void TreeBillboardsApp::BuildXYCircleGeometry()
 	geo->IndexBufferGPU = d3dUtil::CreateDefaultBuffer(md3dDevice.Get(),
 		mCommandList.Get(), indices.data(), ibByteSize, geo->IndexBufferUploader);
 
-	geo->VertexByteStride = sizeof(Vertex);
+	geo->VertexByteStride = sizeof(CircleSpriteVertex);
 	geo->VertexBufferByteSize = vbByteSize;
 	geo->IndexFormat = DXGI_FORMAT_R16_UINT;
 	geo->IndexBufferByteSize = ibByteSize;
@@ -1052,21 +1059,33 @@ void TreeBillboardsApp::BuildPSOs()
 
 	D3D12_GRAPHICS_PIPELINE_STATE_DESC alphaTestedPsoDesc = opaquePsoDesc;
 #ifdef EX1
-	// TODO:
-	//alphaTestedPsoDesc.GS =
-	//{
-	//	reinterpret_cast<BYTE*>(mShaders["treeSpriteGS"]->GetBufferPointer()),
-	//	mShaders["treeSpriteGS"]->GetBufferSize()
-	//};
-#endif //
+	alphaTestedPsoDesc.VS =
+	{
+		reinterpret_cast<BYTE*>(mShaders["treeSpriteVS"]->GetBufferPointer()),
+		mShaders["treeSpriteVS"]->GetBufferSize()
+	};
+	alphaTestedPsoDesc.GS =
+	{
+		reinterpret_cast<BYTE*>(mShaders["treeSpriteGS"]->GetBufferPointer()),
+		mShaders["treeSpriteGS"]->GetBufferSize()
+	};
+	alphaTestedPsoDesc.PS =
+	{
+		reinterpret_cast<BYTE*>(mShaders["treeSpritePS"]->GetBufferPointer()),
+		mShaders["treeSpritePS"]->GetBufferSize()
+	};
+#else
 	alphaTestedPsoDesc.PS = 
 	{ 
 		reinterpret_cast<BYTE*>(mShaders["alphaTestedPS"]->GetBufferPointer()),
 		mShaders["alphaTestedPS"]->GetBufferSize()
 	};
+#endif // EX1
+
 	alphaTestedPsoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
 #ifdef EX1
 	alphaTestedPsoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_LINE;
+	alphaTestedPsoDesc.InputLayout = { mTreeSpriteInputLayout.data(), (UINT)mTreeSpriteInputLayout.size() };
 #endif // EX1
 
 	ThrowIfFailed(md3dDevice->CreateGraphicsPipelineState(&alphaTestedPsoDesc, IID_PPV_ARGS(&mPSOs["alphaTested"])));
@@ -1094,7 +1113,9 @@ void TreeBillboardsApp::BuildPSOs()
 	treeSpritePsoDesc.InputLayout = { mTreeSpriteInputLayout.data(), (UINT)mTreeSpriteInputLayout.size() };
 	treeSpritePsoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
 
+#ifndef EX1 // erase the tree sprite because I overridden the GS
 	ThrowIfFailed(md3dDevice->CreateGraphicsPipelineState(&treeSpritePsoDesc, IID_PPV_ARGS(&mPSOs["treeSprites"])));
+#endif //!EX1
 }
 
 void TreeBillboardsApp::BuildFrameResources()
@@ -1213,7 +1234,7 @@ void TreeBillboardsApp::BuildRenderItems()
 	circleRitem->ObjCBIndex = 0;
 	circleRitem->Mat = mMaterials["wirefence"].get();
 	circleRitem->Geo = mGeometries["circleGeo"].get();
-	circleRitem->PrimitiveType = D3D11_PRIMITIVE_TOPOLOGY_LINESTRIP;
+	circleRitem->PrimitiveType = D3D_PRIMITIVE_TOPOLOGY_LINESTRIP;
 	circleRitem->IndexCount = circleRitem->Geo->DrawArgs["circle"].IndexCount;
 	circleRitem->StartIndexLocation = circleRitem->Geo->DrawArgs["circle"].StartIndexLocation;
 	circleRitem->BaseVertexLocation = circleRitem->Geo->DrawArgs["circle"].BaseVertexLocation;
