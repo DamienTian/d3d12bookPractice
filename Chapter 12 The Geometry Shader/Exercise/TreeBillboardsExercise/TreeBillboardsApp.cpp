@@ -18,7 +18,8 @@ using namespace DirectX::PackedVector;
 
 const int gNumFrameResources = 3;
 
-#define EX1
+//#define EX1
+// EX2 difined in FrameResource.h
 
 // Lightweight structure stores parameters to draw a shape.  This will
 // vary from app-to-app.
@@ -63,6 +64,13 @@ enum class RenderLayer : int
 	Count
 };
 
+// for exercises
+struct AlphaGSVertex
+{
+	XMFLOAT3 Pos;
+	XMFLOAT2 Size;
+};
+
 class TreeBillboardsApp : public D3DApp
 {
 public:
@@ -99,6 +107,9 @@ private:
 	void BuildBoxGeometry();
 #ifdef EX1
 	void BuildXYCircleGeometry();
+#endif
+#ifdef EX2
+	void BuildGeoSphereGeometry();
 #endif
 	void BuildTreeSpritesGeometry();
     void BuildPSOs();
@@ -214,6 +225,8 @@ bool TreeBillboardsApp::Initialize()
 	BuildTreeSpritesGeometry();
 #ifdef EX1
 	BuildXYCircleGeometry();
+#elif defined(EX2)
+	BuildGeoSphereGeometry();
 #endif // EX1
 	BuildMaterials();
     BuildRenderItems();
@@ -263,9 +276,9 @@ void TreeBillboardsApp::Update(const GameTimer& gt)
 	UpdateObjectCBs(gt);
 	UpdateMaterialCBs(gt);
 	UpdateMainPassCB(gt);
-#ifndef EX1
+#if !defined(EX1) && !defined(EX2)
 	UpdateWaves(gt);
-#endif // !EX1
+#endif
 }
 
 void TreeBillboardsApp::Draw(const GameTimer& gt)
@@ -442,6 +455,7 @@ void TreeBillboardsApp::UpdateObjectCBs(const GameTimer& gt)
 
 			ObjectConstants objConstants;
 			XMStoreFloat4x4(&objConstants.World, XMMatrixTranspose(world));
+			XMStoreFloat4x4(&objConstants.WorldInvTranspose, XMMatrixTranspose(XMMatrixInverse(nullptr, world)));
 			XMStoreFloat4x4(&objConstants.TexTransform, XMMatrixTranspose(texTransform));
 
 			currObjectCB->CopyData(e->ObjCBIndex, objConstants);
@@ -702,10 +716,17 @@ void TreeBillboardsApp::BuildShadersAndInputLayouts()
 	mShaders["standardVS"] = d3dUtil::CompileShader(L"Shaders\\Default.hlsl", nullptr, "VS", "vs_5_0");
 	mShaders["opaquePS"] = d3dUtil::CompileShader(L"Shaders\\Default.hlsl", defines, "PS", "ps_5_0");
 	mShaders["alphaTestedPS"] = d3dUtil::CompileShader(L"Shaders\\Default.hlsl", alphaTestDefines, "PS", "ps_5_0");
-	
+
+#if defined(EX2)
+	mShaders["Chapter12Ex2VS"] = d3dUtil::CompileShader(L"Shaders\\Chapter12Ex2.hlsl", nullptr, "VS", "vs_5_0");
+	mShaders["Chapter12Ex2GS"] = d3dUtil::CompileShader(L"Shaders\\Chapter12Ex2.hlsl", nullptr, "GS", "gs_5_0");
+	mShaders["Chapter12Ex2PS"] = d3dUtil::CompileShader(L"Shaders\\Chapter12Ex2.hlsl", alphaTestDefines, "PS", "ps_5_0");
+#endif // EX2
+
 	mShaders["treeSpriteVS"] = d3dUtil::CompileShader(L"Shaders\\TreeSprite.hlsl", nullptr, "VS", "vs_5_0");
 	mShaders["treeSpriteGS"] = d3dUtil::CompileShader(L"Shaders\\TreeSprite.hlsl", nullptr, "GS", "gs_5_0");
 	mShaders["treeSpritePS"] = d3dUtil::CompileShader(L"Shaders\\TreeSprite.hlsl", alphaTestDefines, "PS", "ps_5_0");
+
 
     mStdInputLayout =
     {
@@ -885,16 +906,10 @@ void TreeBillboardsApp::BuildBoxGeometry()
 #ifdef EX1
 void TreeBillboardsApp::BuildXYCircleGeometry()
 {
-	struct CircleSpriteVertex
-	{
-		XMFLOAT3 Pos;
-		XMFLOAT2 Size;
-	};
-
 	GeometryGenerator geoGen;
 	GeometryGenerator::MeshData circle = geoGen.CreateXZCircleByLineStrip(3.0f, 20);
 
-	std::vector<CircleSpriteVertex> vertices(circle.Vertices.size());
+	std::vector<AlphaGSVertex> vertices(circle.Vertices.size());
 	for (size_t i = 0; i < circle.Vertices.size(); ++i)
 	{
 		auto& p = circle.Vertices[i].Position;
@@ -902,7 +917,7 @@ void TreeBillboardsApp::BuildXYCircleGeometry()
 		vertices[i].Size = XMFLOAT2(0.0f, 0.0f);
 	}
 
-	const UINT vbByteSize = (UINT)vertices.size() * sizeof(CircleSpriteVertex);
+	const UINT vbByteSize = (UINT)vertices.size() * sizeof(AlphaGSVertex);
 
 	std::vector<std::uint16_t> indices = circle.GetIndices16();
 	const UINT ibByteSize = (UINT)indices.size() * sizeof(std::uint16_t);
@@ -922,7 +937,7 @@ void TreeBillboardsApp::BuildXYCircleGeometry()
 	geo->IndexBufferGPU = d3dUtil::CreateDefaultBuffer(md3dDevice.Get(),
 		mCommandList.Get(), indices.data(), ibByteSize, geo->IndexBufferUploader);
 
-	geo->VertexByteStride = sizeof(CircleSpriteVertex);
+	geo->VertexByteStride = sizeof(AlphaGSVertex);
 	geo->VertexBufferByteSize = vbByteSize;
 	geo->IndexFormat = DXGI_FORMAT_R16_UINT;
 	geo->IndexBufferByteSize = ibByteSize;
@@ -937,6 +952,57 @@ void TreeBillboardsApp::BuildXYCircleGeometry()
 	mGeometries["circleGeo"] = std::move(geo);
 }
 #endif
+
+#ifdef EX2
+void TreeBillboardsApp::BuildGeoSphereGeometry() 
+{
+	GeometryGenerator geoGen;
+	GeometryGenerator::MeshData geoSphere = geoGen.CreateGeosphere(3.0f, 1);
+
+	std::vector<Vertex> vertices(geoSphere.Vertices.size());
+	for (size_t i = 0; i < geoSphere.Vertices.size(); ++i)
+	{
+		auto& p = geoSphere.Vertices[i].Position;
+		vertices[i].Pos = p;
+		vertices[i].Normal = geoSphere.Vertices[i].Normal;
+		vertices[i].TexC = geoSphere.Vertices[i].TexC;
+	}
+
+	const UINT vbByteSize = (UINT)vertices.size() * sizeof(Vertex);
+
+	std::vector<std::uint16_t> indices = geoSphere.GetIndices16();
+	const UINT ibByteSize = (UINT)indices.size() * sizeof(std::uint16_t);
+
+	auto geo = std::make_unique<MeshGeometry>();
+	geo->Name = "geoSphereGeo";
+
+	ThrowIfFailed(D3DCreateBlob(vbByteSize, &geo->VertexBufferCPU));
+	CopyMemory(geo->VertexBufferCPU->GetBufferPointer(), vertices.data(), vbByteSize);
+
+	ThrowIfFailed(D3DCreateBlob(ibByteSize, &geo->IndexBufferCPU));
+	CopyMemory(geo->IndexBufferCPU->GetBufferPointer(), indices.data(), ibByteSize);
+
+	geo->VertexBufferGPU = d3dUtil::CreateDefaultBuffer(md3dDevice.Get(),
+		mCommandList.Get(), vertices.data(), vbByteSize, geo->VertexBufferUploader);
+
+	geo->IndexBufferGPU = d3dUtil::CreateDefaultBuffer(md3dDevice.Get(),
+		mCommandList.Get(), indices.data(), ibByteSize, geo->IndexBufferUploader);
+
+	geo->VertexByteStride = sizeof(Vertex);
+	geo->VertexBufferByteSize = vbByteSize;
+	geo->IndexFormat = DXGI_FORMAT_R16_UINT;
+	geo->IndexBufferByteSize = ibByteSize;
+
+	SubmeshGeometry submesh;
+	submesh.IndexCount = (UINT)indices.size();
+	submesh.StartIndexLocation = 0;
+	submesh.BaseVertexLocation = 0;
+
+	geo->DrawArgs["geoSphere"] = submesh;
+
+	mGeometries["geoSphereGeo"] = std::move(geo);
+}
+#endif // EX2
 
 void TreeBillboardsApp::BuildTreeSpritesGeometry()
 {
@@ -1058,29 +1124,17 @@ void TreeBillboardsApp::BuildPSOs()
 	//
 
 	D3D12_GRAPHICS_PIPELINE_STATE_DESC alphaTestedPsoDesc = opaquePsoDesc;
-#ifdef EX1
-	alphaTestedPsoDesc.VS =
-	{
-		reinterpret_cast<BYTE*>(mShaders["treeSpriteVS"]->GetBufferPointer()),
-		mShaders["treeSpriteVS"]->GetBufferSize()
-	};
-	alphaTestedPsoDesc.GS =
-	{
-		reinterpret_cast<BYTE*>(mShaders["treeSpriteGS"]->GetBufferPointer()),
-		mShaders["treeSpriteGS"]->GetBufferSize()
-	};
-	alphaTestedPsoDesc.PS =
-	{
-		reinterpret_cast<BYTE*>(mShaders["treeSpritePS"]->GetBufferPointer()),
-		mShaders["treeSpritePS"]->GetBufferSize()
-	};
+#if defined(EX1)
+	alphaTestedPsoDesc.VS = { reinterpret_cast<BYTE*>(mShaders["treeSpriteVS"]->GetBufferPointer()), mShaders["treeSpriteVS"]->GetBufferSize() };
+	alphaTestedPsoDesc.GS = { reinterpret_cast<BYTE*>(mShaders["treeSpriteGS"]->GetBufferPointer()), mShaders["treeSpriteGS"]->GetBufferSize() };
+	alphaTestedPsoDesc.PS = { reinterpret_cast<BYTE*>(mShaders["treeSpritePS"]->GetBufferPointer()), mShaders["treeSpritePS"]->GetBufferSize() };
+#elif defined(EX2)
+	alphaTestedPsoDesc.VS = { reinterpret_cast<BYTE*>(mShaders["Chapter12Ex2VS"]->GetBufferPointer()), mShaders["Chapter12Ex2VS"]->GetBufferSize() };
+	alphaTestedPsoDesc.GS = { reinterpret_cast<BYTE*>(mShaders["Chapter12Ex2GS"]->GetBufferPointer()), mShaders["Chapter12Ex2GS"]->GetBufferSize() };
+	alphaTestedPsoDesc.PS = { reinterpret_cast<BYTE*>(mShaders["Chapter12Ex2PS"]->GetBufferPointer()), mShaders["Chapter12Ex2PS"]->GetBufferSize() };
 #else
-	alphaTestedPsoDesc.PS = 
-	{ 
-		reinterpret_cast<BYTE*>(mShaders["alphaTestedPS"]->GetBufferPointer()),
-		mShaders["alphaTestedPS"]->GetBufferSize()
-	};
-#endif // EX1
+	alphaTestedPsoDesc.PS = { reinterpret_cast<BYTE*>(mShaders["alphaTestedPS"]->GetBufferPointer()), mShaders["alphaTestedPS"]->GetBufferSize() };
+#endif // EX1 or EX2
 
 	alphaTestedPsoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
 #ifdef EX1
@@ -1171,7 +1225,33 @@ void TreeBillboardsApp::BuildMaterials()
 
 void TreeBillboardsApp::BuildRenderItems()
 {
-#ifndef EX1
+#ifdef EX1
+	auto circleRitem = std::make_unique<RenderItem>();
+	XMStoreFloat4x4(&circleRitem->World, XMMatrixTranslation(3.0f, 2.0f, -9.0f));
+	circleRitem->ObjCBIndex = 0;
+	circleRitem->Mat = mMaterials["wirefence"].get();
+	circleRitem->Geo = mGeometries["circleGeo"].get();
+	circleRitem->PrimitiveType = D3D_PRIMITIVE_TOPOLOGY_LINESTRIP;
+	circleRitem->IndexCount = circleRitem->Geo->DrawArgs["circle"].IndexCount;
+	circleRitem->StartIndexLocation = circleRitem->Geo->DrawArgs["circle"].StartIndexLocation;
+	circleRitem->BaseVertexLocation = circleRitem->Geo->DrawArgs["circle"].BaseVertexLocation;
+
+	mRitemLayer[(int)RenderLayer::AlphaTested].push_back(circleRitem.get());
+	mAllRitems.push_back(std::move(circleRitem));
+#elif defined(EX2)
+	auto geoSphereRitem = std::make_unique<RenderItem>();
+	XMStoreFloat4x4(&geoSphereRitem->World, XMMatrixTranslation(3.0f, 2.0f, -9.0f));
+	geoSphereRitem->ObjCBIndex = 0;
+	geoSphereRitem->Mat = mMaterials["wirefence"].get();
+	geoSphereRitem->Geo = mGeometries["geoSphereGeo"].get();
+	geoSphereRitem->PrimitiveType = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
+	geoSphereRitem->IndexCount = geoSphereRitem->Geo->DrawArgs["geoSphere"].IndexCount;
+	geoSphereRitem->StartIndexLocation = geoSphereRitem->Geo->DrawArgs["geoSphere"].StartIndexLocation;
+	geoSphereRitem->BaseVertexLocation = geoSphereRitem->Geo->DrawArgs["geoSphere"].BaseVertexLocation;
+
+	mRitemLayer[(int)RenderLayer::AlphaTested].push_back(geoSphereRitem.get());
+	mAllRitems.push_back(std::move(geoSphereRitem));
+#else
 	auto wavesRitem = std::make_unique<RenderItem>();
 	wavesRitem->World = MathHelper::Identity4x4();
 	XMStoreFloat4x4(&wavesRitem->TexTransform, XMMatrixScaling(5.0f, 5.0f, 1.0f));
@@ -1228,20 +1308,7 @@ void TreeBillboardsApp::BuildRenderItems()
 	mAllRitems.push_back(std::move(gridRitem));
 	mAllRitems.push_back(std::move(boxRitem));
 	mAllRitems.push_back(std::move(treeSpritesRitem));
-#else
-	auto circleRitem = std::make_unique<RenderItem>();
-	XMStoreFloat4x4(&circleRitem->World, XMMatrixTranslation(3.0f, 2.0f, -9.0f));
-	circleRitem->ObjCBIndex = 0;
-	circleRitem->Mat = mMaterials["wirefence"].get();
-	circleRitem->Geo = mGeometries["circleGeo"].get();
-	circleRitem->PrimitiveType = D3D_PRIMITIVE_TOPOLOGY_LINESTRIP;
-	circleRitem->IndexCount = circleRitem->Geo->DrawArgs["circle"].IndexCount;
-	circleRitem->StartIndexLocation = circleRitem->Geo->DrawArgs["circle"].StartIndexLocation;
-	circleRitem->BaseVertexLocation = circleRitem->Geo->DrawArgs["circle"].BaseVertexLocation;
-
-	mRitemLayer[(int)RenderLayer::AlphaTested].push_back(circleRitem.get());
-	mAllRitems.push_back(std::move(circleRitem));
-#endif // !EX1
+#endif
 }
 
 void TreeBillboardsApp::DrawRenderItems(ID3D12GraphicsCommandList* cmdList, const std::vector<RenderItem*>& ritems)

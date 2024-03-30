@@ -15,13 +15,13 @@
     #define NUM_SPOT_LIGHTS 0
 #endif
 
-#define EX1
+//#define EX1
+//#define EX2
 
 // Include structures and functions for lighting.
 #include "LightingUtil.hlsl"
 
 Texture2DArray gTreeMapArray : register(t0);
-
 
 SamplerState gsamPointWrap        : register(s0);
 SamplerState gsamPointClamp       : register(s1);
@@ -108,8 +108,49 @@ VertexOut VS(VertexIn vin)
 	return vout;
 }
  
-#ifndef EX1
- // We expand each point into a quad (4 vertices), so the maximum number of vertices
+#ifdef EX1
+[maxvertexcount(4)]
+void GS(line VertexOut gin[2],
+        uint primID : SV_PrimitiveID,
+        inout TriangleStream<GeoOut> triStream)
+{
+    float3 up = float3(0.0f, 1.0f, 0.0f);
+    float3 look = gEyePosW - gin[0].CenterW;
+    look.y = 0.0f; // y-axis aligned, so project to xz-plane
+    look = normalize(look);
+    float3 right = cross(up, look);
+	
+    float3 deltaDistance = up * 8;
+	
+    float4 v[4];
+    v[0] = float4(gin[0].CenterW, 1.0f);
+    v[1] = float4(gin[1].CenterW, 1.0f);
+    v[2] = float4(gin[0].CenterW + deltaDistance * 1, 1.0f);
+    v[3] = float4(gin[1].CenterW + deltaDistance * 1, 1.0f);
+	
+    float2 texC[4] =
+    {
+        float2(0.0f, 1.0f),
+		float2(0.0f, 0.0f),
+		float2(1.0f, 1.0f),
+		float2(1.0f, 0.0f)
+    };
+	
+    GeoOut gout;
+	[unroll]
+    for (int i = 0; i < 4; ++i)
+    {
+        gout.PosH = mul(v[i], gViewProj);
+        gout.PosW = v[i].xyz;
+        gout.NormalW = look;
+        gout.TexC = texC[i];
+        gout.PrimID = primID;
+		
+        triStream.Append(gout);
+    }
+}
+#else
+// We expand each point into a quad (4 vertices), so the maximum number of vertices
  // we output per geometry shader invocation is 4.
 [maxvertexcount(4)]
 void GS(point VertexOut gin[1], 
@@ -164,47 +205,6 @@ void GS(point VertexOut gin[1],
 		
 		triStream.Append(gout);
 	}
-}
-#else
-[maxvertexcount(4)]
-void GS(line VertexOut gin[2],
-        uint primID : SV_PrimitiveID,
-        inout TriangleStream<GeoOut> triStream)
-{
-    float3 up = float3(0.0f, 1.0f, 0.0f);
-    float3 look = gEyePosW - gin[0].CenterW;
-    look.y = 0.0f; // y-axis aligned, so project to xz-plane
-    look = normalize(look);
-    float3 right = cross(up, look);
-	
-    float3 deltaDistance = up * 8;
-	
-    float4 v[4];
-    v[0] = float4(gin[0].CenterW, 1.0f);
-    v[1] = float4(gin[1].CenterW, 1.0f);
-    v[2] = float4(gin[0].CenterW + deltaDistance * 1, 1.0f);
-    v[3] = float4(gin[1].CenterW + deltaDistance * 1, 1.0f);
-	
-    float2 texC[4] =
-    {
-        float2(0.0f, 1.0f),
-		float2(0.0f, 0.0f),
-		float2(1.0f, 1.0f),
-		float2(1.0f, 0.0f)
-    };
-	
-    GeoOut gout;
-	[unroll]
-    for (int i = 0; i < 4; ++i)
-    {
-        gout.PosH = mul(v[i], gViewProj);
-        gout.PosW = v[i].xyz;
-        gout.NormalW = look;
-        gout.TexC = texC[i];
-        gout.PrimID = primID;
-		
-        triStream.Append(gout);
-    }
 }
 #endif // !EX1
 
