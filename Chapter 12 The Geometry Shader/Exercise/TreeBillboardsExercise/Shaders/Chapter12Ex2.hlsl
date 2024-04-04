@@ -1,25 +1,24 @@
-//
-// Chapter12Ex2.hlsl by Hao Tian.
-// This shader file for Chapter12 Exercise 2, focus on geometry shader
-//
+
+// ref: https://ask.csdn.net/questions/7604699?weChatOA=weChatOA1
 
 // Defaults for number of lights.
 #ifndef NUM_DIR_LIGHTS
-    #define NUM_DIR_LIGHTS 3
+#define NUM_DIR_LIGHTS 3
 #endif
 
 #ifndef NUM_POINT_LIGHTS
-    #define NUM_POINT_LIGHTS 0
+#define NUM_POINT_LIGHTS 0
 #endif
 
 #ifndef NUM_SPOT_LIGHTS
-    #define NUM_SPOT_LIGHTS 0
+#define NUM_SPOT_LIGHTS 0
 #endif
 
 // Include structures and functions for lighting.
 #include "LightingUtil.hlsl"
 
 Texture2DArray gTreeMapArray : register(t0);
+
 
 SamplerState gsamPointWrap : register(s0);
 SamplerState gsamPointClamp : register(s1);
@@ -74,7 +73,7 @@ cbuffer cbMaterial : register(b2)
     float gRoughness;
     float4x4 gMatTransform;
 };
- 
+
 struct VertexIn
 {
     float3 PosL : POSITION;
@@ -84,6 +83,7 @@ struct VertexIn
 
 struct VertexOut
 {
+    float4 PosH : SV_POSITION;
     float3 PosL : POSITION;
     float3 NormalL : NORMAL;
     float2 TexC : TEXCOORD;
@@ -95,147 +95,127 @@ struct GeoOut
     float3 PosW : POSITION;
     float3 NormalW : NORMAL;
     float2 TexC : TEXCOORD;
+    uint PrimID : SV_PrimitiveID;
 };
-
-void Subdivide(VertexOut inVerts[3], out VertexOut outVerts[6])
-{
-    //       v1
-	//       *
-	//      / \
-	//     /   \
-	//  m0*-----*m1
-	//   / \   / \
-	//  /   \ /   \
-	// *-----*-----*
-	// v0    m2     v2
-    
-    VertexOut m[3];
-    // Compute edge midpoints.
-    m[0].PosL = 0.5f * (inVerts[0].PosL + inVerts[1].PosL);
-    m[1].PosL = 0.5f * (inVerts[1].PosL + inVerts[2].PosL);
-    m[2].PosL = 0.5f * (inVerts[2].PosL + inVerts[0].PosL);
-    // Project onto unit sphere
-    m[0].PosL = normalize(m[0].PosL);
-    m[1].PosL = normalize(m[1].PosL);
-    m[2].PosL = normalize(m[2].PosL);
-    // Derive normals.
-    m[0].NormalL = m[0].PosL;
-    m[1].NormalL = m[1].PosL;
-    m[2].NormalL = m[2].PosL;
-    
-    // Interpolate texture coordinates.
-    m[0].TexC = 0.5f * (inVerts[0].TexC + inVerts[1].TexC);
-    m[1].TexC = 0.5f * (inVerts[1].TexC + inVerts[2].TexC);
-    m[2].TexC = 0.5f * (inVerts[2].TexC + inVerts[0].TexC);
-    
-    outVerts[0] = inVerts[0];
-    outVerts[1] = m[0];
-    outVerts[2] = m[2];
-    outVerts[3] = m[1];
-    outVerts[4] = inVerts[2];
-    outVerts[5] = inVerts[1];
-}
-
-void OutputSubdivision(VertexOut v[6],
-inout TriangleStream<GeoOut> triStream)
-{
-    GeoOut gout[6];
-    [unroll]
-    for (int i = 0; i < 6; ++i)
-    {
-        // Transform to world space space.
-        gout[i].PosW = mul(float4(v[i].PosL, 1.0f), gWorld).xyz;
-        gout[i].NormalW = mul(v[i].NormalL, (float3x3) gWorldInvTranspose);
-        // Transform to homogeneous clip space.
-        gout[i].PosH = mul(float4(v[i].PosL, 1.0f), gViewProj);
-        gout[i].TexC = v[i].TexC;
-    }
-    
-    //       v1
-	//       *
-	//      / \
-	//     /   \
-	//  m0*-----*m1
-	//   / \   / \
-	//  /   \ /   \
-	// *-----*-----*
-	// v0    m2     v2
-    // We can draw the subdivision in two strips:
-    //  Strip 1: bottom three triangles
-    //  Strip 2: top triangle
-    
-    [unroll]
-    for (int j = 0; j < 5; ++j)
-    {
-        triStream.Append(gout[j]);
-    }
-    triStream.RestartStrip();
-    triStream.Append(gout[1]);
-    triStream.Append(gout[5]);
-    triStream.Append(gout[3]);
-}
 
 VertexOut VS(VertexIn vin)
 {
     VertexOut vout;
 
-	// Just pass data over to geometry shader.
-    vout.PosL= vin.PosL;
+    // Just pass data over to geometry shader.
+    float4 posW = mul(float4(vin.PosL, 1.0f), gWorld);
+    vout.PosH = mul(posW, gViewProj);
+    vout.PosL = vin.PosL;
     vout.NormalL = vin.NormalL;
     vout.TexC = vin.TexC;
 
     return vout;
 }
- 
 
-[maxvertexcount(8)]
-void GS(triangle VertexOut gin[3], inout TriangleStream<GeoOut> triStream)
+VertexOut MidPoint(VertexOut lhs, VertexOut rhs)
 {
-    VertexOut v[6];
-    Subdivide(gin, v);
-    OutputSubdivision(v, triStream);
+    lhs.PosL = normalize(lhs.PosL);
+    rhs.PosL = normalize(rhs.PosL);
+    
+    VertexOut m;
+
+    m.PosL = 0.5f * (lhs.PosL + rhs.PosL) * 3.0f; // 乘以球的半径
+   // m.PosL = normalize(m.PosL);
+    m.NormalL = m.PosL;
+    m.TexC = 0.5f * (lhs.TexC + rhs.TexC);
+
+    return m;
 }
 
-float4 PS(GeoOut pin) : SV_Target
+GeoOut ToGeoOut(VertexOut inVert, uint primID)
 {
-    float3 uvw = float3(pin.TexC, 0.0f);
-    float4 diffuseAlbedo = gTreeMapArray.Sample(gsamAnisotropicWrap, uvw) * gDiffuseAlbedo;
-	
-#ifdef ALPHA_TEST
-	// Discard pixel if texture alpha < 0.1.  We do this test as soon 
-	// as possible in the shader so that we can potentially exit the
-	// shader early, thereby skipping the rest of the shader code.
-	clip(diffuseAlbedo.a - 0.1f);
-#endif
+    GeoOut gout;
 
-    // Interpolating normal can unnormalize it, so renormalize it.
-    pin.NormalW = normalize(pin.NormalW);
+    // 将顶点变换到世界空间
+    gout.PosW = mul(float4(inVert.PosL, 1.0f), gWorld).xyz;
+    gout.NormalW = mul(inVert.NormalL, (float3x3) gWorldInvTranspose);
 
-    // Vector from point being lit to eye. 
-    float3 toEyeW = gEyePosW - pin.PosW;
-    float distToEye = length(toEyeW);
-    toEyeW /= distToEye; // normalize
+    // 把顶点变换到齐次裁剪空间
+    gout.PosH = mul(float4(gout.PosW, 1.0f), gViewProj);
+    gout.TexC = inVert.TexC;
 
-    // Light terms.
-    float4 ambient = gAmbientLight * diffuseAlbedo;
-
-    const float shininess = 1.0f - gRoughness;
-    Material mat = { diffuseAlbedo, gFresnelR0, shininess };
-    float3 shadowFactor = 1.0f;
-    float4 directLight = ComputeLighting(gLights, mat, pin.PosW,
-        pin.NormalW, toEyeW, shadowFactor);
-
-    float4 litColor = ambient + directLight;
-
-#ifdef FOG
-	float fogAmount = saturate((distToEye - gFogStart) / gFogRange);
-	litColor = lerp(litColor, gFogColor, fogAmount);
-#endif
-
-    // Common convention to take alpha from diffuse albedo.
-    litColor.a = diffuseAlbedo.a;
-
-    return litColor;
+    gout.PrimID = primID;
+    return gout;
 }
 
+void SubdivideAndOutput(VertexOut inVerts[3], int subCnt, inout TriangleStream<GeoOut> triStream, uint primID)
+{
+    VertexOut m[10][10], t[10][10];
+    int row = 2, col = 2, i = 0, j = 0;
+    m[0][0] = inVerts[0];
+    m[1][0] = inVerts[1];
+    m[0][1] = inVerts[2];
 
+    while (subCnt--)
+    {
+        for (i = 0; i < row; ++i)
+        {
+            int cur_col = col - i; // 当前行的列数
+            for (j = 0; j < cur_col; ++j)
+            {
+                int targetRow = 2 * i, targetCol = 2 * j;
+                t[targetRow][targetCol] = m[i][j];
+
+                if (j < cur_col - 1)
+                {
+                    // 向上寻找中点
+                    t[targetRow + 1][targetCol] = MidPoint(m[i][j], m[i + 1][j]);
+                    // 向右寻找中点
+                    t[targetRow][targetCol + 1] = MidPoint(m[i][j], m[i][j + 1]);
+                }
+                if (i > 0)
+                {
+                    // 当非三角形最上方顶点时，向斜下方寻找中点
+                    t[targetRow - 1][targetCol + 1] = MidPoint(m[i][j], m[i - 1][j + 1]);
+                }
+            }
+        }
+        row = 2 * row - 1;
+        col = 2 * col - 1;
+        // 拷贝t->m
+        for (i = 0; i < row; ++i)
+            for (j = 0; j < col - i; ++j)
+                m[i][j] = t[i][j];
+    }
+
+    // 将顶点按三角形带加入输出流
+    for (i = 0; i < row; ++i)
+    {
+        int cur_col = col - i;
+        for (j = 0; j < cur_col - 1; ++j)
+        {
+            triStream.Append(ToGeoOut(m[i][j], primID));
+            triStream.Append(ToGeoOut(m[i + 1][j], primID));
+        }
+        if (i + 1 != row)
+            triStream.Append(ToGeoOut(m[i][cur_col - 1], primID));
+        triStream.RestartStrip(); // 记录完一行三角形，重新开始记录下一行
+    }
+}
+
+[maxvertexcount(75)]
+void GS(triangle VertexOut gin[3], uint primID : SV_PrimitiveID, inout TriangleStream<GeoOut> triStream)
+{
+    float3 posW = float3(gWorld._m30, gWorld._m31, gWorld._m32);
+    float dis = distance(posW, gEyePosW);
+    int subCnt = 0;
+
+    if (dis < 15)
+        subCnt = 2;
+    else if (dis < 30)
+        subCnt = 1;
+    else
+        subCnt = 0;
+
+    SubdivideAndOutput(gin, subCnt, triStream, primID);
+}
+
+float4 PS(VertexOut pin) : SV_Target
+{
+    return float4(1.0f, 1.0f, 1.0f, 1.0f);
+}

@@ -61,6 +61,9 @@ enum class RenderLayer : int
 	Transparent,
 	AlphaTested,
 	AlphaTestedTreeSprites,
+#ifdef EX2
+	Exercise2,
+#endif // EX2
 	Count
 };
 
@@ -328,6 +331,11 @@ void TreeBillboardsApp::Draw(const GameTimer& gt)
 	mCommandList->SetPipelineState(mPSOs["transparent"].Get());
 	DrawRenderItems(mCommandList.Get(), mRitemLayer[(int)RenderLayer::Transparent]);
 
+#ifdef EX2
+	mCommandList->SetPipelineState(mPSOs["ex2"].Get());
+	DrawRenderItems(mCommandList.Get(), mRitemLayer[(int)RenderLayer::Exercise2]);
+#endif // EX2
+
     // Indicate a state transition on the resource usage.
 	mCommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(CurrentBackBuffer(),
 		D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT));
@@ -455,7 +463,7 @@ void TreeBillboardsApp::UpdateObjectCBs(const GameTimer& gt)
 
 			ObjectConstants objConstants;
 			XMStoreFloat4x4(&objConstants.World, XMMatrixTranspose(world));
-			XMStoreFloat4x4(&objConstants.WorldInvTranspose, XMMatrixTranspose(XMMatrixInverse(nullptr, world)));
+			XMStoreFloat4x4(&objConstants.WorldInvTranspose, XMMatrixTranspose(XMMatrixInverse(nullptr, XMMatrixTranspose(world))));
 			XMStoreFloat4x4(&objConstants.TexTransform, XMMatrixTranspose(texTransform));
 
 			currObjectCB->CopyData(e->ObjCBIndex, objConstants);
@@ -1128,13 +1136,9 @@ void TreeBillboardsApp::BuildPSOs()
 	alphaTestedPsoDesc.VS = { reinterpret_cast<BYTE*>(mShaders["treeSpriteVS"]->GetBufferPointer()), mShaders["treeSpriteVS"]->GetBufferSize() };
 	alphaTestedPsoDesc.GS = { reinterpret_cast<BYTE*>(mShaders["treeSpriteGS"]->GetBufferPointer()), mShaders["treeSpriteGS"]->GetBufferSize() };
 	alphaTestedPsoDesc.PS = { reinterpret_cast<BYTE*>(mShaders["treeSpritePS"]->GetBufferPointer()), mShaders["treeSpritePS"]->GetBufferSize() };
-#elif defined(EX2)
-	alphaTestedPsoDesc.VS = { reinterpret_cast<BYTE*>(mShaders["Chapter12Ex2VS"]->GetBufferPointer()), mShaders["Chapter12Ex2VS"]->GetBufferSize() };
-	alphaTestedPsoDesc.GS = { reinterpret_cast<BYTE*>(mShaders["Chapter12Ex2GS"]->GetBufferPointer()), mShaders["Chapter12Ex2GS"]->GetBufferSize() };
-	alphaTestedPsoDesc.PS = { reinterpret_cast<BYTE*>(mShaders["Chapter12Ex2PS"]->GetBufferPointer()), mShaders["Chapter12Ex2PS"]->GetBufferSize() };
 #else
 	alphaTestedPsoDesc.PS = { reinterpret_cast<BYTE*>(mShaders["alphaTestedPS"]->GetBufferPointer()), mShaders["alphaTestedPS"]->GetBufferSize() };
-#endif // EX1 or EX2
+#endif // EX1
 
 	alphaTestedPsoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
 #ifdef EX1
@@ -1143,6 +1147,21 @@ void TreeBillboardsApp::BuildPSOs()
 #endif // EX1
 
 	ThrowIfFailed(md3dDevice->CreateGraphicsPipelineState(&alphaTestedPsoDesc, IID_PPV_ARGS(&mPSOs["alphaTested"])));
+
+#if defined(EX2)
+	D3D12_GRAPHICS_PIPELINE_STATE_DESC ex2PsoDesc = opaquePsoDesc;
+
+	ex2PsoDesc.VS = { reinterpret_cast<BYTE*>(mShaders["Chapter12Ex2VS"]->GetBufferPointer()), mShaders["Chapter12Ex2VS"]->GetBufferSize() };
+	ex2PsoDesc.GS = { reinterpret_cast<BYTE*>(mShaders["Chapter12Ex2GS"]->GetBufferPointer()), mShaders["Chapter12Ex2GS"]->GetBufferSize() };
+	ex2PsoDesc.PS = { reinterpret_cast<BYTE*>(mShaders["Chapter12Ex2PS"]->GetBufferPointer()), mShaders["Chapter12Ex2PS"]->GetBufferSize() };
+	
+	ex2PsoDesc.RasterizerState.FillMode = D3D12_FILL_MODE_WIREFRAME;
+	ex2PsoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
+	ex2PsoDesc.SampleDesc.Count = 1;
+	ex2PsoDesc.SampleDesc.Quality = 0;
+
+	ThrowIfFailed(md3dDevice->CreateGraphicsPipelineState(&ex2PsoDesc, IID_PPV_ARGS(&mPSOs["ex2"])));
+#endif
 
 	//
 	// PSO for tree sprites
@@ -1240,16 +1259,16 @@ void TreeBillboardsApp::BuildRenderItems()
 	mAllRitems.push_back(std::move(circleRitem));
 #elif defined(EX2)
 	auto geoSphereRitem = std::make_unique<RenderItem>();
-	XMStoreFloat4x4(&geoSphereRitem->World, XMMatrixTranslation(3.0f, 2.0f, -9.0f));
+	//XMStoreFloat4x4(&geoSphereRitem->World, XMMatrixTranslation(3.0f, 2.0f, -9.0f));
 	geoSphereRitem->ObjCBIndex = 0;
-	geoSphereRitem->Mat = mMaterials["wirefence"].get();
+	geoSphereRitem->Mat = mMaterials["water"].get();
 	geoSphereRitem->Geo = mGeometries["geoSphereGeo"].get();
 	geoSphereRitem->PrimitiveType = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
 	geoSphereRitem->IndexCount = geoSphereRitem->Geo->DrawArgs["geoSphere"].IndexCount;
 	geoSphereRitem->StartIndexLocation = geoSphereRitem->Geo->DrawArgs["geoSphere"].StartIndexLocation;
 	geoSphereRitem->BaseVertexLocation = geoSphereRitem->Geo->DrawArgs["geoSphere"].BaseVertexLocation;
 
-	mRitemLayer[(int)RenderLayer::AlphaTested].push_back(geoSphereRitem.get());
+	mRitemLayer[(int)RenderLayer::Exercise2].push_back(geoSphereRitem.get());
 	mAllRitems.push_back(std::move(geoSphereRitem));
 #else
 	auto wavesRitem = std::make_unique<RenderItem>();

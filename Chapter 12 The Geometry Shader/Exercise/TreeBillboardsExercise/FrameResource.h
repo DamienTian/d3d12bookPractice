@@ -4,15 +4,13 @@
 #include "../Common/MathHelper.h"
 #include "../Common/UploadBuffer.h"
 
-#define EX2
+//#define EX2
 
 struct ObjectConstants
 {
     DirectX::XMFLOAT4X4 World = MathHelper::Identity4x4();
 	DirectX::XMFLOAT4X4 TexTransform = MathHelper::Identity4x4();
-#ifdef EX2
     DirectX::XMFLOAT4X4 WorldInvTranspose = MathHelper::Identity4x4();
-#endif // EX2
 };
 
 struct PassConstants
