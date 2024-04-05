@@ -4,8 +4,6 @@
 #include "../Common/MathHelper.h"
 #include "../Common/UploadBuffer.h"
 
-//#define EX2
-
 struct ObjectConstants
 {
     DirectX::XMFLOAT4X4 World = MathHelper::Identity4x4();

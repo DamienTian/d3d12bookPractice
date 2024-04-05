@@ -1,5 +1,6 @@
+// This shader file is for multiple exercises
 
-// ref: https://ask.csdn.net/questions/7604699?weChatOA=weChatOA1
+// EX2 ref: https://ask.csdn.net/questions/7604699?weChatOA=weChatOA1
 
 // Defaults for number of lights.
 #ifndef NUM_DIR_LIGHTS
@@ -17,8 +18,10 @@
 // Include structures and functions for lighting.
 #include "LightingUtil.hlsl"
 
-Texture2DArray gTreeMapArray : register(t0);
+//#define EX2
+#define EX3
 
+Texture2DArray gTreeMapArray : register(t0);
 
 SamplerState gsamPointWrap : register(s0);
 SamplerState gsamPointClamp : register(s1);
@@ -198,6 +201,7 @@ void SubdivideAndOutput(VertexOut inVerts[3], int subCnt, inout TriangleStream<G
     }
 }
 
+#if defined(EX2)
 [maxvertexcount(75)]
 void GS(triangle VertexOut gin[3], uint primID : SV_PrimitiveID, inout TriangleStream<GeoOut> triStream)
 {
@@ -214,6 +218,46 @@ void GS(triangle VertexOut gin[3], uint primID : SV_PrimitiveID, inout TriangleS
 
     SubdivideAndOutput(gin, subCnt, triStream, primID);
 }
+#elif defined(EX3)
+[maxvertexcount(3)]
+void GS(triangle VertexOut gin[3], uint primID : SV_PrimitiveID, inout TriangleStream<GeoOut> triStream)
+{
+    // compute face normal
+    float3 v1 = gin[1].PosL - gin[0].PosL;
+    float3 v2 = gin[2].PosL - gin[0].PosL;
+    float3 faceNormal = normalize(cross(v1, v2)) * primID;
+    
+    GeoOut gout;
+	[unroll]
+    for (int i = 0; i < 3; ++i)
+    {
+        gout.PosW = mul(float4(gin[i].PosL + gTotalTime * faceNormal, 1.0f), gWorld).xyz;
+        gout.PosH = mul(float4(gout.PosW, 1.0f), gViewProj);
+        gout.NormalW = mul(float4(gin[i].NormalL, 0.0f), gInvViewProj);
+        gout.TexC = gin[i].TexC;
+        gout.PrimID = primID;
+		
+        triStream.Append(gout);
+    }
+}
+#else
+[maxvertexcount(3)]
+void GS(triangle VertexOut gin[3], uint primID : SV_PrimitiveID, inout TriangleStream<GeoOut> triStream)
+{
+    GeoOut gout;
+	[unroll]
+    for (int i = 0; i < 3; ++i)
+    {
+        gout.PosH = mul(float4(gin[i].PosL, 1.0f), gViewProj);
+        gout.PosW = mul(float4(gin[i].PosL, 1.0f), gWorld).xyz;
+        gout.NormalW = normalize(mul(float4(gin[i].NormalL, 0.0f), gInvViewProj));
+        gout.TexC = gin[i].TexC;
+        gout.PrimID = primID;
+		
+        triStream.Append(gout);
+    }
+}
+#endif
 
 float4 PS(VertexOut pin) : SV_Target
 {

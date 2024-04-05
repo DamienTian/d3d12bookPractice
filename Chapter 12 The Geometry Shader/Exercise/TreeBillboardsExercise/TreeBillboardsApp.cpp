@@ -18,8 +18,9 @@ using namespace DirectX::PackedVector;
 
 const int gNumFrameResources = 3;
 
-//#define EX1
-// EX2 difined in FrameResource.h
+//#define EX1 // shader: TreeSprite.hlsl
+//#define EX2 // shader: Chapter12Exercises12.hlsl
+#define EX3 // shader: Chapter12Exercises12.hlsl
 
 // Lightweight structure stores parameters to draw a shape.  This will
 // vary from app-to-app.
@@ -61,9 +62,9 @@ enum class RenderLayer : int
 	Transparent,
 	AlphaTested,
 	AlphaTestedTreeSprites,
-#ifdef EX2
-	Exercise2,
-#endif // EX2
+#if defined(EX2) || defined(EX3)
+	Exercise_2_3,
+#endif
 	Count
 };
 
@@ -111,7 +112,7 @@ private:
 #ifdef EX1
 	void BuildXYCircleGeometry();
 #endif
-#ifdef EX2
+#if defined(EX2) || defined(EX3)
 	void BuildGeoSphereGeometry();
 #endif
 	void BuildTreeSpritesGeometry();
@@ -228,7 +229,7 @@ bool TreeBillboardsApp::Initialize()
 	BuildTreeSpritesGeometry();
 #ifdef EX1
 	BuildXYCircleGeometry();
-#elif defined(EX2)
+#elif defined(EX2) || defined(EX3)
 	BuildGeoSphereGeometry();
 #endif // EX1
 	BuildMaterials();
@@ -279,7 +280,7 @@ void TreeBillboardsApp::Update(const GameTimer& gt)
 	UpdateObjectCBs(gt);
 	UpdateMaterialCBs(gt);
 	UpdateMainPassCB(gt);
-#if !defined(EX1) && !defined(EX2)
+#if !defined(EX1) && !defined(EX2) && !defined(EX3)
 	UpdateWaves(gt);
 #endif
 }
@@ -331,9 +332,9 @@ void TreeBillboardsApp::Draw(const GameTimer& gt)
 	mCommandList->SetPipelineState(mPSOs["transparent"].Get());
 	DrawRenderItems(mCommandList.Get(), mRitemLayer[(int)RenderLayer::Transparent]);
 
-#ifdef EX2
-	mCommandList->SetPipelineState(mPSOs["ex2"].Get());
-	DrawRenderItems(mCommandList.Get(), mRitemLayer[(int)RenderLayer::Exercise2]);
+#if defined(EX2) || defined(EX3) 
+	mCommandList->SetPipelineState(mPSOs["ex_2_3"].Get());
+	DrawRenderItems(mCommandList.Get(), mRitemLayer[(int)RenderLayer::Exercise_2_3]);
 #endif // EX2
 
     // Indicate a state transition on the resource usage.
@@ -725,10 +726,10 @@ void TreeBillboardsApp::BuildShadersAndInputLayouts()
 	mShaders["opaquePS"] = d3dUtil::CompileShader(L"Shaders\\Default.hlsl", defines, "PS", "ps_5_0");
 	mShaders["alphaTestedPS"] = d3dUtil::CompileShader(L"Shaders\\Default.hlsl", alphaTestDefines, "PS", "ps_5_0");
 
-#if defined(EX2)
-	mShaders["Chapter12Ex2VS"] = d3dUtil::CompileShader(L"Shaders\\Chapter12Ex2.hlsl", nullptr, "VS", "vs_5_0");
-	mShaders["Chapter12Ex2GS"] = d3dUtil::CompileShader(L"Shaders\\Chapter12Ex2.hlsl", nullptr, "GS", "gs_5_0");
-	mShaders["Chapter12Ex2PS"] = d3dUtil::CompileShader(L"Shaders\\Chapter12Ex2.hlsl", alphaTestDefines, "PS", "ps_5_0");
+#if defined(EX2) || defined(EX3)
+	mShaders["Chapter12ExercisesVS"] = d3dUtil::CompileShader(L"Shaders\\Chapter12Exercises.hlsl", nullptr, "VS", "vs_5_0");
+	mShaders["Chapter12ExercisesGS"] = d3dUtil::CompileShader(L"Shaders\\Chapter12Exercises.hlsl", nullptr, "GS", "gs_5_0");
+	mShaders["Chapter12ExercisesPS"] = d3dUtil::CompileShader(L"Shaders\\Chapter12Exercises.hlsl", alphaTestDefines, "PS", "ps_5_0");
 #endif // EX2
 
 	mShaders["treeSpriteVS"] = d3dUtil::CompileShader(L"Shaders\\TreeSprite.hlsl", nullptr, "VS", "vs_5_0");
@@ -961,11 +962,16 @@ void TreeBillboardsApp::BuildXYCircleGeometry()
 }
 #endif
 
-#ifdef EX2
+#if defined(EX2) || defined(EX3)
 void TreeBillboardsApp::BuildGeoSphereGeometry() 
 {
 	GeometryGenerator geoGen;
+
+#if defined(EX2)
 	GeometryGenerator::MeshData geoSphere = geoGen.CreateGeosphere(3.0f, 1);
+#elif defined(EX3)
+	GeometryGenerator::MeshData geoSphere = geoGen.CreateGeosphere(3.0f, 0);
+#endif
 
 	std::vector<Vertex> vertices(geoSphere.Vertices.size());
 	for (size_t i = 0; i < geoSphere.Vertices.size(); ++i)
@@ -1148,19 +1154,19 @@ void TreeBillboardsApp::BuildPSOs()
 
 	ThrowIfFailed(md3dDevice->CreateGraphicsPipelineState(&alphaTestedPsoDesc, IID_PPV_ARGS(&mPSOs["alphaTested"])));
 
-#if defined(EX2)
-	D3D12_GRAPHICS_PIPELINE_STATE_DESC ex2PsoDesc = opaquePsoDesc;
+#if defined(EX2) || defined(EX3)
+	D3D12_GRAPHICS_PIPELINE_STATE_DESC ex_2_3PsoDesc = opaquePsoDesc;
 
-	ex2PsoDesc.VS = { reinterpret_cast<BYTE*>(mShaders["Chapter12Ex2VS"]->GetBufferPointer()), mShaders["Chapter12Ex2VS"]->GetBufferSize() };
-	ex2PsoDesc.GS = { reinterpret_cast<BYTE*>(mShaders["Chapter12Ex2GS"]->GetBufferPointer()), mShaders["Chapter12Ex2GS"]->GetBufferSize() };
-	ex2PsoDesc.PS = { reinterpret_cast<BYTE*>(mShaders["Chapter12Ex2PS"]->GetBufferPointer()), mShaders["Chapter12Ex2PS"]->GetBufferSize() };
+	ex_2_3PsoDesc.VS = { reinterpret_cast<BYTE*>(mShaders["Chapter12ExercisesVS"]->GetBufferPointer()), mShaders["Chapter12ExercisesVS"]->GetBufferSize() };
+	ex_2_3PsoDesc.GS = { reinterpret_cast<BYTE*>(mShaders["Chapter12ExercisesGS"]->GetBufferPointer()), mShaders["Chapter12ExercisesGS"]->GetBufferSize() };
+	ex_2_3PsoDesc.PS = { reinterpret_cast<BYTE*>(mShaders["Chapter12ExercisesPS"]->GetBufferPointer()), mShaders["Chapter12ExercisesPS"]->GetBufferSize() };
 	
-	ex2PsoDesc.RasterizerState.FillMode = D3D12_FILL_MODE_WIREFRAME;
-	ex2PsoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
-	ex2PsoDesc.SampleDesc.Count = 1;
-	ex2PsoDesc.SampleDesc.Quality = 0;
+	ex_2_3PsoDesc.RasterizerState.FillMode = D3D12_FILL_MODE_WIREFRAME;
+	ex_2_3PsoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
+	ex_2_3PsoDesc.SampleDesc.Count = 1;
+	ex_2_3PsoDesc.SampleDesc.Quality = 0;
 
-	ThrowIfFailed(md3dDevice->CreateGraphicsPipelineState(&ex2PsoDesc, IID_PPV_ARGS(&mPSOs["ex2"])));
+	ThrowIfFailed(md3dDevice->CreateGraphicsPipelineState(&ex_2_3PsoDesc, IID_PPV_ARGS(&mPSOs["ex_2_3"])));
 #endif
 
 	//
@@ -1257,7 +1263,7 @@ void TreeBillboardsApp::BuildRenderItems()
 
 	mRitemLayer[(int)RenderLayer::AlphaTested].push_back(circleRitem.get());
 	mAllRitems.push_back(std::move(circleRitem));
-#elif defined(EX2)
+#elif defined(EX2) || defined(EX3)
 	auto geoSphereRitem = std::make_unique<RenderItem>();
 	//XMStoreFloat4x4(&geoSphereRitem->World, XMMatrixTranslation(3.0f, 2.0f, -9.0f));
 	geoSphereRitem->ObjCBIndex = 0;
@@ -1268,7 +1274,7 @@ void TreeBillboardsApp::BuildRenderItems()
 	geoSphereRitem->StartIndexLocation = geoSphereRitem->Geo->DrawArgs["geoSphere"].StartIndexLocation;
 	geoSphereRitem->BaseVertexLocation = geoSphereRitem->Geo->DrawArgs["geoSphere"].BaseVertexLocation;
 
-	mRitemLayer[(int)RenderLayer::Exercise2].push_back(geoSphereRitem.get());
+	mRitemLayer[(int)RenderLayer::Exercise_2_3].push_back(geoSphereRitem.get());
 	mAllRitems.push_back(std::move(geoSphereRitem));
 #else
 	auto wavesRitem = std::make_unique<RenderItem>();

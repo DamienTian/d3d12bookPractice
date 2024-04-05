@@ -16,7 +16,6 @@
 #endif
 
 //#define EX1
-//#define EX2
 
 // Include structures and functions for lighting.
 #include "LightingUtil.hlsl"
@@ -206,7 +205,7 @@ void GS(point VertexOut gin[1],
 		triStream.Append(gout);
 	}
 }
-#endif // !EX1
+#endif
 
 float4 PS(GeoOut pin) : SV_Target
 {
