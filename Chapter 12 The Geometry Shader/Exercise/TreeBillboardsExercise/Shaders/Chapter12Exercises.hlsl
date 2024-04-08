@@ -19,7 +19,9 @@
 #include "LightingUtil.hlsl"
 
 //#define EX2
-#define EX3
+//#define EX3
+//#define EX4
+#define EX5
 
 Texture2DArray gTreeMapArray : register(t0);
 
@@ -225,7 +227,7 @@ void GS(triangle VertexOut gin[3], uint primID : SV_PrimitiveID, inout TriangleS
     // compute face normal
     float3 v1 = gin[1].PosL - gin[0].PosL;
     float3 v2 = gin[2].PosL - gin[0].PosL;
-    float3 faceNormal = normalize(cross(v1, v2)) * primID;
+    float3 faceNormal = normalize(cross(v1, v2)) * primID; // could without normalization
     
     GeoOut gout;
 	[unroll]
@@ -240,6 +242,62 @@ void GS(triangle VertexOut gin[3], uint primID : SV_PrimitiveID, inout TriangleS
         triStream.Append(gout);
     }
 }
+#elif defined(EX4)
+[maxvertexcount(2)]
+void GS(point VertexOut gin[1],
+        uint primID : SV_PrimitiveID,
+        inout LineStream<GeoOut> lineStream)
+{
+    GeoOut start, end;
+
+    start.PosH = gin[0].PosH;
+    start.PosW = mul(float4(gin[0].PosL, 1.0f), gWorld).xyz;
+    start.NormalW = mul(gin[0].NormalL, (float3x3) gWorld);
+    start.TexC = gin[0].TexC;
+    start.PrimID = primID;
+		
+    lineStream.Append(start);
+    
+    float3 len = start.NormalW * 1.0f;
+    float3 endPos = start.PosW + len;
+    end = start;
+    
+    end.PosH = mul(float4(endPos, 1.0f), gViewProj);
+    end.PosW = endPos;
+    
+    lineStream.Append(end);
+}
+#elif defined(EX5)
+[maxvertexcount(2)]
+void GS(triangle VertexOut gin[3], uint primID : SV_PrimitiveID, inout LineStream<GeoOut> lineStream)
+{
+    // compute face normal
+    float3 v1 = gin[1].PosL - gin[0].PosL;
+    float3 v2 = gin[2].PosL - gin[0].PosL;
+    float3 faceNormalL = normalize(cross(v1, v2)); // could without normalization
+    
+    float3 startPosL = (gin[0].PosL + gin[1].PosL + gin[2].PosL) / 3.0f;
+    float3 startPosW = mul(startPosL, (float3x3) gWorld);
+    
+    GeoOut start, end;
+
+    start.PosH = mul(float4(startPosW, 1.0f), gViewProj);
+    start.PosW = startPosW;
+    start.NormalW = mul(faceNormalL, (float3x3) gWorld);
+    start.TexC = gin[0].TexC;
+    start.PrimID = primID;
+		
+    lineStream.Append(start);
+    
+    float3 len = start.NormalW * 1.0f;
+    float3 endPos = start.PosW + len;
+    end = start;
+    
+    end.PosH = mul(float4(endPos, 1.0f), gViewProj);
+    end.PosW = endPos;
+    
+    lineStream.Append(end);
+}
 #else
 [maxvertexcount(3)]
 void GS(triangle VertexOut gin[3], uint primID : SV_PrimitiveID, inout TriangleStream<GeoOut> triStream)
@@ -250,7 +308,7 @@ void GS(triangle VertexOut gin[3], uint primID : SV_PrimitiveID, inout TriangleS
     {
         gout.PosH = mul(float4(gin[i].PosL, 1.0f), gViewProj);
         gout.PosW = mul(float4(gin[i].PosL, 1.0f), gWorld).xyz;
-        gout.NormalW = normalize(mul(float4(gin[i].NormalL, 0.0f), gInvViewProj));
+        gout.NormalW = normalize(mul(float4(gin[i].NormalL, 0.0f,) gInvViewProj));
         gout.TexC = gin[i].TexC;
         gout.PrimID = primID;
 		
@@ -261,5 +319,11 @@ void GS(triangle VertexOut gin[3], uint primID : SV_PrimitiveID, inout TriangleS
 
 float4 PS(VertexOut pin) : SV_Target
 {
+#if defined(EX2) || defined(EX3)
+    return float4(0.0f, 0.0f, 0.0f, 1.0f);
+#elif defined(EX4) || defined(EX5)
+    return float4(128.0f, 0.0f, 128.0f, 1.0f);
+#else
     return float4(1.0f, 1.0f, 1.0f, 1.0f);
+#endif
 }

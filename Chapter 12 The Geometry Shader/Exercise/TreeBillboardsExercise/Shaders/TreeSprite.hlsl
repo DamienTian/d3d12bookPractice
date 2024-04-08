@@ -16,6 +16,8 @@
 #endif
 
 //#define EX1
+//#define EX6
+#define EX7
 
 // Include structures and functions for lighting.
 #include "LightingUtil.hlsl"
@@ -96,13 +98,17 @@ struct GeoOut
     uint   PrimID  : SV_PrimitiveID;
 };
 
-VertexOut VS(VertexIn vin)
+VertexOut VS(VertexIn vin, uint vertID : SV_VertexID)
 {
 	VertexOut vout;
 
 	// Just pass data over to geometry shader.
 	vout.CenterW = vin.PosW;
+#if defined(EX6)
+    vout.SizeW = float2(2 + vertID, 2 + vertID);
+#else
 	vout.SizeW   = vin.SizeW;
+#endif
 
 	return vout;
 }
@@ -209,7 +215,11 @@ void GS(point VertexOut gin[1],
 
 float4 PS(GeoOut pin) : SV_Target
 {
+#ifdef EX7
+    float3 uvw = float3(pin.TexC, pin.PrimID);
+#else
 	float3 uvw = float3(pin.TexC, pin.PrimID%3);
+#endif // EX7
     float4 diffuseAlbedo = gTreeMapArray.Sample(gsamAnisotropicWrap, uvw) * gDiffuseAlbedo;
 	
 #ifdef ALPHA_TEST

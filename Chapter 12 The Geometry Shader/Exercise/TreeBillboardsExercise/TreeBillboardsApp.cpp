@@ -15,12 +15,16 @@ using namespace DirectX::PackedVector;
 
 #pragma comment(lib, "d3dcompiler.lib")
 #pragma comment(lib, "D3D12.lib")
-
 const int gNumFrameResources = 3;
 
 //#define EX1 // shader: TreeSprite.hlsl
 //#define EX2 // shader: Chapter12Exercises12.hlsl
-#define EX3 // shader: Chapter12Exercises12.hlsl
+//#define EX3 // shader: Chapter12Exercises12.hlsl
+//#define EX4 // shader: Chapter12Exercises12.hlsl
+#define EX5 // shader: Chapter12Exercises12.hlsl
+//#define EX6 // shader: TreeSprite.hlsl
+//#define EX7 // shader: TreeSprite.hlsl
+
 
 // Lightweight structure stores parameters to draw a shape.  This will
 // vary from app-to-app.
@@ -64,6 +68,9 @@ enum class RenderLayer : int
 	AlphaTestedTreeSprites,
 #if defined(EX2) || defined(EX3)
 	Exercise_2_3,
+#endif
+#if defined(EX4) || defined(EX5)
+	Exercise_4_5,
 #endif
 	Count
 };
@@ -112,7 +119,7 @@ private:
 #ifdef EX1
 	void BuildXYCircleGeometry();
 #endif
-#if defined(EX2) || defined(EX3)
+#if defined(EX2) || defined(EX3) || defined(EX4) || defined(EX5)
 	void BuildGeoSphereGeometry();
 #endif
 	void BuildTreeSpritesGeometry();
@@ -121,6 +128,9 @@ private:
     void BuildMaterials();
     void BuildRenderItems();
     void DrawRenderItems(ID3D12GraphicsCommandList* cmdList, const std::vector<RenderItem*>& ritems);
+#if defined(EX6) || defined(EX7) 
+	void DrawTreeSprites(ID3D12GraphicsCommandList* cmdList, const std::vector<RenderItem*>& ritems);
+#endif // EX6 || EX7
 
 	std::array<const CD3DX12_STATIC_SAMPLER_DESC, 6> GetStaticSamplers();
 
@@ -229,7 +239,7 @@ bool TreeBillboardsApp::Initialize()
 	BuildTreeSpritesGeometry();
 #ifdef EX1
 	BuildXYCircleGeometry();
-#elif defined(EX2) || defined(EX3)
+#elif defined(EX2) || defined(EX3) || defined(EX4) || defined(EX5)
 	BuildGeoSphereGeometry();
 #endif // EX1
 	BuildMaterials();
@@ -280,7 +290,7 @@ void TreeBillboardsApp::Update(const GameTimer& gt)
 	UpdateObjectCBs(gt);
 	UpdateMaterialCBs(gt);
 	UpdateMainPassCB(gt);
-#if !defined(EX1) && !defined(EX2) && !defined(EX3)
+#if !defined(EX1) && !defined(EX2) && !defined(EX3) && !defined(EX4) && !defined(EX5)
 	UpdateWaves(gt);
 #endif
 }
@@ -326,8 +336,12 @@ void TreeBillboardsApp::Draw(const GameTimer& gt)
 
 #ifndef EX1 // erase the tree sprite because I overridden the GS
 	mCommandList->SetPipelineState(mPSOs["treeSprites"].Get());
+#if defined(EX6) || defined(EX7) 
+	DrawTreeSprites(mCommandList.Get(), mRitemLayer[(int)RenderLayer::AlphaTestedTreeSprites]);
+#else
 	DrawRenderItems(mCommandList.Get(), mRitemLayer[(int)RenderLayer::AlphaTestedTreeSprites]);
-#endif
+#endif // EX6 || EX7
+#endif // !EX1
 
 	mCommandList->SetPipelineState(mPSOs["transparent"].Get());
 	DrawRenderItems(mCommandList.Get(), mRitemLayer[(int)RenderLayer::Transparent]);
@@ -335,7 +349,12 @@ void TreeBillboardsApp::Draw(const GameTimer& gt)
 #if defined(EX2) || defined(EX3) 
 	mCommandList->SetPipelineState(mPSOs["ex_2_3"].Get());
 	DrawRenderItems(mCommandList.Get(), mRitemLayer[(int)RenderLayer::Exercise_2_3]);
-#endif // EX2
+#endif
+
+#if defined(EX4) || defined(EX5)
+	mCommandList->SetPipelineState(mPSOs["ex_4_5"].Get());
+	DrawRenderItems(mCommandList.Get(), mRitemLayer[(int)RenderLayer::Exercise_4_5]);
+#endif
 
     // Indicate a state transition on the resource usage.
 	mCommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(CurrentBackBuffer(),
@@ -726,7 +745,7 @@ void TreeBillboardsApp::BuildShadersAndInputLayouts()
 	mShaders["opaquePS"] = d3dUtil::CompileShader(L"Shaders\\Default.hlsl", defines, "PS", "ps_5_0");
 	mShaders["alphaTestedPS"] = d3dUtil::CompileShader(L"Shaders\\Default.hlsl", alphaTestDefines, "PS", "ps_5_0");
 
-#if defined(EX2) || defined(EX3)
+#if defined(EX2) || defined(EX3) || defined(EX4) || defined(EX5)
 	mShaders["Chapter12ExercisesVS"] = d3dUtil::CompileShader(L"Shaders\\Chapter12Exercises.hlsl", nullptr, "VS", "vs_5_0");
 	mShaders["Chapter12ExercisesGS"] = d3dUtil::CompileShader(L"Shaders\\Chapter12Exercises.hlsl", nullptr, "GS", "gs_5_0");
 	mShaders["Chapter12ExercisesPS"] = d3dUtil::CompileShader(L"Shaders\\Chapter12Exercises.hlsl", alphaTestDefines, "PS", "ps_5_0");
@@ -962,30 +981,44 @@ void TreeBillboardsApp::BuildXYCircleGeometry()
 }
 #endif
 
-#if defined(EX2) || defined(EX3)
+#if defined(EX2) || defined(EX3) || defined(EX4) || defined(EX5)
 void TreeBillboardsApp::BuildGeoSphereGeometry() 
 {
 	GeometryGenerator geoGen;
 
 #if defined(EX2)
 	GeometryGenerator::MeshData geoSphere = geoGen.CreateGeosphere(3.0f, 1);
-#elif defined(EX3)
+#elif defined(EX3) || defined(EX4) || defined(EX5)
 	GeometryGenerator::MeshData geoSphere = geoGen.CreateGeosphere(3.0f, 0);
 #endif
 
 	std::vector<Vertex> vertices(geoSphere.Vertices.size());
+
+#if defined(EX4)
+	const size_t sizeOfNormals = geoSphere.Vertices.size();
+	std::vector<Vertex> vertexNormals(sizeOfNormals);
+	std::vector<std::uint16_t> indicesVertexNormals(sizeOfNormals);
+#endif // EX4
+
 	for (size_t i = 0; i < geoSphere.Vertices.size(); ++i)
 	{
 		auto& p = geoSphere.Vertices[i].Position;
 		vertices[i].Pos = p;
 		vertices[i].Normal = geoSphere.Vertices[i].Normal;
 		vertices[i].TexC = geoSphere.Vertices[i].TexC;
+
+#if defined(EX4)
+		vertexNormals[i].Pos = p;
+		vertexNormals[i].Normal = geoSphere.Vertices[i].Normal;
+		vertexNormals[i].TexC = geoSphere.Vertices[i].TexC;
+		indicesVertexNormals[i] = i;
+#endif // EX4
 	}
 
-	const UINT vbByteSize = (UINT)vertices.size() * sizeof(Vertex);
+	UINT vbByteSize = (UINT)vertices.size() * sizeof(Vertex);
 
 	std::vector<std::uint16_t> indices = geoSphere.GetIndices16();
-	const UINT ibByteSize = (UINT)indices.size() * sizeof(std::uint16_t);
+	UINT ibByteSize = (UINT)indices.size() * sizeof(std::uint16_t);
 
 	auto geo = std::make_unique<MeshGeometry>();
 	geo->Name = "geoSphereGeo";
@@ -1015,8 +1048,40 @@ void TreeBillboardsApp::BuildGeoSphereGeometry()
 	geo->DrawArgs["geoSphere"] = submesh;
 
 	mGeometries["geoSphereGeo"] = std::move(geo);
+
+#if defined(EX4)
+	vbByteSize = (UINT)vertexNormals.size() * sizeof(Vertex);
+	ibByteSize = (UINT)indicesVertexNormals.size() * sizeof(std::uint16_t);
+
+	geo = std::make_unique<MeshGeometry>();
+	geo->Name = "geoSphereVertexNormalsGeo";
+
+	ThrowIfFailed(D3DCreateBlob(vbByteSize, &geo->VertexBufferCPU));
+	CopyMemory(geo->VertexBufferCPU->GetBufferPointer(), vertexNormals.data(), vbByteSize);
+
+	ThrowIfFailed(D3DCreateBlob(ibByteSize, &geo->IndexBufferCPU));
+	CopyMemory(geo->IndexBufferCPU->GetBufferPointer(), indicesVertexNormals.data(), ibByteSize);
+
+	geo->VertexBufferGPU = d3dUtil::CreateDefaultBuffer(md3dDevice.Get(),
+		mCommandList.Get(), vertexNormals.data(), vbByteSize, geo->VertexBufferUploader);
+
+	geo->IndexBufferGPU = d3dUtil::CreateDefaultBuffer(md3dDevice.Get(),
+		mCommandList.Get(), indicesVertexNormals.data(), ibByteSize, geo->IndexBufferUploader);
+
+	geo->VertexByteStride = sizeof(Vertex);
+	geo->VertexBufferByteSize = vbByteSize;
+	geo->IndexFormat = DXGI_FORMAT_R16_UINT;
+	geo->IndexBufferByteSize = ibByteSize;
+
+	submesh.IndexCount = (UINT)indicesVertexNormals.size();
+	submesh.StartIndexLocation = 0;
+	submesh.BaseVertexLocation = 0;
+
+	geo->DrawArgs["geoSphereVertexNormals"] = submesh;
+	mGeometries["geoSphereVertexNormalsGeo"] = std::move(geo);
+#endif // EX4
 }
-#endif // EX2
+#endif // EX2 || EX3 || EX4 || EX5
 
 void TreeBillboardsApp::BuildTreeSpritesGeometry()
 {
@@ -1110,6 +1175,14 @@ void TreeBillboardsApp::BuildPSOs()
 	opaquePsoDesc.SampleDesc.Count = m4xMsaaState ? 4 : 1;
 	opaquePsoDesc.SampleDesc.Quality = m4xMsaaState ? (m4xMsaaQuality - 1) : 0;
 	opaquePsoDesc.DSVFormat = mDepthStencilFormat;
+
+#if defined(EX4) || defined(EX5)
+	opaquePsoDesc.RasterizerState.FillMode = D3D12_FILL_MODE_WIREFRAME;
+	opaquePsoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
+	opaquePsoDesc.SampleDesc.Count = 1;
+	opaquePsoDesc.SampleDesc.Quality = 0;
+#endif
+
     ThrowIfFailed(md3dDevice->CreateGraphicsPipelineState(&opaquePsoDesc, IID_PPV_ARGS(&mPSOs["opaque"])));
 
 	//
@@ -1154,19 +1227,26 @@ void TreeBillboardsApp::BuildPSOs()
 
 	ThrowIfFailed(md3dDevice->CreateGraphicsPipelineState(&alphaTestedPsoDesc, IID_PPV_ARGS(&mPSOs["alphaTested"])));
 
-#if defined(EX2) || defined(EX3)
-	D3D12_GRAPHICS_PIPELINE_STATE_DESC ex_2_3PsoDesc = opaquePsoDesc;
+#if defined(EX2) || defined(EX3) || defined(EX4) || defined(EX5)
+	D3D12_GRAPHICS_PIPELINE_STATE_DESC exercisesPsoDesc = opaquePsoDesc;
 
-	ex_2_3PsoDesc.VS = { reinterpret_cast<BYTE*>(mShaders["Chapter12ExercisesVS"]->GetBufferPointer()), mShaders["Chapter12ExercisesVS"]->GetBufferSize() };
-	ex_2_3PsoDesc.GS = { reinterpret_cast<BYTE*>(mShaders["Chapter12ExercisesGS"]->GetBufferPointer()), mShaders["Chapter12ExercisesGS"]->GetBufferSize() };
-	ex_2_3PsoDesc.PS = { reinterpret_cast<BYTE*>(mShaders["Chapter12ExercisesPS"]->GetBufferPointer()), mShaders["Chapter12ExercisesPS"]->GetBufferSize() };
+	exercisesPsoDesc.VS = { reinterpret_cast<BYTE*>(mShaders["Chapter12ExercisesVS"]->GetBufferPointer()), mShaders["Chapter12ExercisesVS"]->GetBufferSize() };
+	exercisesPsoDesc.GS = { reinterpret_cast<BYTE*>(mShaders["Chapter12ExercisesGS"]->GetBufferPointer()), mShaders["Chapter12ExercisesGS"]->GetBufferSize() };
+	exercisesPsoDesc.PS = { reinterpret_cast<BYTE*>(mShaders["Chapter12ExercisesPS"]->GetBufferPointer()), mShaders["Chapter12ExercisesPS"]->GetBufferSize() };
 	
-	ex_2_3PsoDesc.RasterizerState.FillMode = D3D12_FILL_MODE_WIREFRAME;
-	ex_2_3PsoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
-	ex_2_3PsoDesc.SampleDesc.Count = 1;
-	ex_2_3PsoDesc.SampleDesc.Quality = 0;
+	exercisesPsoDesc.RasterizerState.FillMode = D3D12_FILL_MODE_WIREFRAME;
+	exercisesPsoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
+	exercisesPsoDesc.SampleDesc.Count = 1;
+	exercisesPsoDesc.SampleDesc.Quality = 0;
 
-	ThrowIfFailed(md3dDevice->CreateGraphicsPipelineState(&ex_2_3PsoDesc, IID_PPV_ARGS(&mPSOs["ex_2_3"])));
+#if defined(EX2) || defined(EX3)
+	ThrowIfFailed(md3dDevice->CreateGraphicsPipelineState(&exercisesPsoDesc, IID_PPV_ARGS(&mPSOs["ex_2_3"])));
+#elif defined(EX4) || defined(EX5)
+#ifdef EX4
+	exercisesPsoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_POINT;
+#endif // EX4
+	ThrowIfFailed(md3dDevice->CreateGraphicsPipelineState(&exercisesPsoDesc, IID_PPV_ARGS(&mPSOs["ex_4_5"])));
+#endif
 #endif
 
 	//
@@ -1265,7 +1345,6 @@ void TreeBillboardsApp::BuildRenderItems()
 	mAllRitems.push_back(std::move(circleRitem));
 #elif defined(EX2) || defined(EX3)
 	auto geoSphereRitem = std::make_unique<RenderItem>();
-	//XMStoreFloat4x4(&geoSphereRitem->World, XMMatrixTranslation(3.0f, 2.0f, -9.0f));
 	geoSphereRitem->ObjCBIndex = 0;
 	geoSphereRitem->Mat = mMaterials["water"].get();
 	geoSphereRitem->Geo = mGeometries["geoSphereGeo"].get();
@@ -1276,6 +1355,38 @@ void TreeBillboardsApp::BuildRenderItems()
 
 	mRitemLayer[(int)RenderLayer::Exercise_2_3].push_back(geoSphereRitem.get());
 	mAllRitems.push_back(std::move(geoSphereRitem));
+#elif defined(EX4) || defined(EX5)
+	auto geoSphereRitem = std::make_unique<RenderItem>();
+	geoSphereRitem->ObjCBIndex = 0;
+	geoSphereRitem->Mat = mMaterials["water"].get();
+	geoSphereRitem->Geo = mGeometries["geoSphereGeo"].get();
+	geoSphereRitem->PrimitiveType = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
+	geoSphereRitem->IndexCount = geoSphereRitem->Geo->DrawArgs["geoSphere"].IndexCount;
+	geoSphereRitem->StartIndexLocation = geoSphereRitem->Geo->DrawArgs["geoSphere"].StartIndexLocation;
+	geoSphereRitem->BaseVertexLocation = geoSphereRitem->Geo->DrawArgs["geoSphere"].BaseVertexLocation;
+
+	mRitemLayer[(int)RenderLayer::Opaque].push_back(geoSphereRitem.get());
+	
+#ifdef EX4
+	auto geoSphereVertexNormalsRitem = std::make_unique<RenderItem>();
+	geoSphereVertexNormalsRitem->ObjCBIndex = 1;
+	geoSphereVertexNormalsRitem->Mat = mMaterials["grass"].get();
+	geoSphereVertexNormalsRitem->Geo = mGeometries["geoSphereVertexNormalsGeo"].get();
+	geoSphereVertexNormalsRitem->PrimitiveType = D3D_PRIMITIVE_TOPOLOGY_POINTLIST;
+	geoSphereVertexNormalsRitem->IndexCount = geoSphereVertexNormalsRitem->Geo->DrawArgs["geoSphereVertexNormals"].IndexCount;
+	geoSphereVertexNormalsRitem->StartIndexLocation = geoSphereVertexNormalsRitem->Geo->DrawArgs["geoSphereVertexNormals"].StartIndexLocation;
+	geoSphereVertexNormalsRitem->BaseVertexLocation = geoSphereVertexNormalsRitem->Geo->DrawArgs["geoSphereVertexNormals"].BaseVertexLocation;
+#endif // EX4
+
+#ifdef EX5
+	auto geoSphereVertexNormalsRitem = std::make_unique<RenderItem>(*geoSphereRitem);
+	geoSphereVertexNormalsRitem->ObjCBIndex = 1;
+#endif // EX5
+
+	mRitemLayer[(int)RenderLayer::Exercise_4_5].push_back(geoSphereVertexNormalsRitem.get());
+
+	mAllRitems.push_back(std::move(geoSphereRitem));
+	mAllRitems.push_back(std::move(geoSphereVertexNormalsRitem));
 #else
 	auto wavesRitem = std::make_unique<RenderItem>();
 	wavesRitem->World = MathHelper::Identity4x4();
@@ -1366,6 +1477,62 @@ void TreeBillboardsApp::DrawRenderItems(ID3D12GraphicsCommandList* cmdList, cons
         cmdList->DrawIndexedInstanced(ri->IndexCount, 1, ri->StartIndexLocation, ri->BaseVertexLocation, 0);
     }
 }
+
+#if defined(EX6) || defined(EX7) 
+void TreeBillboardsApp::DrawTreeSprites(ID3D12GraphicsCommandList* cmdList, const std::vector<RenderItem*>& ritems)
+{
+	UINT objCBByteSize = d3dUtil::CalcConstantBufferByteSize(sizeof(ObjectConstants));
+	UINT matCBByteSize = d3dUtil::CalcConstantBufferByteSize(sizeof(MaterialConstants));
+
+	auto objectCB = mCurrFrameResource->ObjectCB->Resource();
+	auto matCB = mCurrFrameResource->MaterialCB->Resource();
+
+	// For each render item...
+	for (size_t i = 0; i < ritems.size(); ++i)
+	{
+		auto ri = ritems[i];
+
+		cmdList->IASetVertexBuffers(0, 1, &ri->Geo->VertexBufferView());
+		cmdList->IASetIndexBuffer(&ri->Geo->IndexBufferView());
+		cmdList->IASetPrimitiveTopology(ri->PrimitiveType);
+
+		CD3DX12_GPU_DESCRIPTOR_HANDLE tex(mSrvDescriptorHeap->GetGPUDescriptorHandleForHeapStart());
+		tex.Offset(ri->Mat->DiffuseSrvHeapIndex, mCbvSrvDescriptorSize);
+
+		D3D12_GPU_VIRTUAL_ADDRESS objCBAddress = objectCB->GetGPUVirtualAddress() + ri->ObjCBIndex * objCBByteSize;
+		D3D12_GPU_VIRTUAL_ADDRESS matCBAddress = matCB->GetGPUVirtualAddress() + ri->Mat->MatCBIndex * matCBByteSize;
+
+		cmdList->SetGraphicsRootDescriptorTable(0, tex);
+		cmdList->SetGraphicsRootConstantBufferView(1, objCBAddress);
+		cmdList->SetGraphicsRootConstantBufferView(3, matCBAddress);
+
+		// Exercise 6 & 7 Explaination:
+		//	Because index will be used as primId in GS, so passing indices as 0 (Method 1) would cause the primId of 
+		//	vertices in range 0 to 3 because each group of 4 vertices of DrawIndexedInstanced call has primId in range
+		//  from 0 to 3.
+		// 
+		//  However, In Method 2: because of StartIndexLocation is changing, so the primId range is not limit to 0 to 3; 
+		//  the range is 0 to 15.
+		// 
+		//	In Exercise 6, the size of trees will be different with different primId.
+		//  In Exercise 7, the texture of trees will be different with different primId.
+		// 
+		// (ref: https://zhuanlan.zhihu.com/p/260422520)
+		
+		// Method 1 (for Exercise 7, use this method)
+		cmdList->DrawIndexedInstanced(4, 1, 0, 0, 0);
+		cmdList->DrawIndexedInstanced(4, 1, 0, 4, 0);
+		cmdList->DrawIndexedInstanced(4, 1, 0, 8, 0);
+		cmdList->DrawIndexedInstanced(4, 1, 0, 12, 0);
+
+		// Method 2
+		//cmdList->DrawIndexedInstanced(4, 1, 0, 0, 0);
+		//cmdList->DrawIndexedInstanced(4, 1, 4, 0, 0);
+		//cmdList->DrawIndexedInstanced(4, 1, 8, 0, 0);
+		//cmdList->DrawIndexedInstanced(4, 1, 12, 0, 0);
+	}
+}
+#endif // EX6 || EX7
 
 std::array<const CD3DX12_STATIC_SAMPLER_DESC, 6> TreeBillboardsApp::GetStaticSamplers()
 {
