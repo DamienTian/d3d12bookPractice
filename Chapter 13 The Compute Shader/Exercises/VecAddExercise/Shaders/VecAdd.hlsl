@@ -1,7 +1,8 @@
-#define EX1
+//#define EX1
 //#define EX2
+#define EX3
 
-#if defined(EX1)
+
 struct DataIn
 {
     float3 v;
@@ -15,6 +16,7 @@ struct DataOut
     float calMag;
 };
 
+#if defined(EX1)
 StructuredBuffer<DataIn> gInput : register(t0);
 RWStructuredBuffer<DataOut> gOutput : register(u0);
 
@@ -35,6 +37,21 @@ RWStructuredBuffer<float> gOutput : register(u0);
 void CS(int3 dtid : SV_DispatchThreadID)
 {
     gOutput[dtid.x] = length(gInput[dtid.x]);
+}
+#elif defined(EX3)
+
+ConsumeStructuredBuffer<DataIn> gInput : register(t0);
+AppendStructuredBuffer<DataOut> gOutput : register(u0);
+
+[numthreads(64, 1, 1)]
+void CS()
+{
+    DataIn di = gInput.Consume();
+    DataOut doo;
+    doo.v = di.v;
+    doo.mag = di.mag;
+    doo.calMag = length(di.v);
+    gOutput.Append(doo);
 }
 #else // origin
 struct Data

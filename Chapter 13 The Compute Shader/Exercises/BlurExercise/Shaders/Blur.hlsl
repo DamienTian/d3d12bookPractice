@@ -2,6 +2,8 @@
 // Performs a separable Guassian blur with a blur radius up to 5 pixels.
 //=============================================================================
 
+#define EX4 // wrong algorithm, but sort of work
+
 cbuffer cbSettings : register(b0)
 {
 	// We cannot have an array entry in a constant buffer that gets mapped onto
@@ -24,7 +26,7 @@ cbuffer cbSettings : register(b0)
 };
 
 static const int gMaxBlurRadius = 5;
-
+static const float bilateralSigma = 25.0f;
 
 Texture2D gInput            : register(t0);
 RWTexture2D<float4> gOutput : register(u0);
@@ -32,6 +34,27 @@ RWTexture2D<float4> gOutput : register(u0);
 #define N 256
 #define CacheSize (N + 2*gMaxBlurRadius)
 groupshared float4 gCache[CacheSize];
+
+void BilateralWeightPixel(float center, out float result[11])
+{
+    float weightTotal = 0.0f;
+    float twoSigma2 = 2.0f * bilateralSigma * bilateralSigma;
+    for (int i = -gBlurRadius; i <= gBlurRadius; ++i)
+    {
+        int k = center + i;
+        float diff = length(gCache[k] - gCache[center]);
+        //result[i + gBlurRadius] = exp(-diff * diff / twoSigma2);
+        result[i + gBlurRadius] = exp(-diff * diff / twoSigma2);
+        //weightTotal += result[i + gBlurRadius];        
+		weightTotal += diff;
+    }
+	
+    for (int j = 0; j <= 10; ++j)
+    {
+        //result[j] /= weightTotal;
+        result[j] /= (weightTotal + 1.0);
+    }
+}
 
 [numthreads(N, 1, 1)]
 void HorzBlurCS(int3 groupThreadID : SV_GroupThreadID,
@@ -72,17 +95,28 @@ void HorzBlurCS(int3 groupThreadID : SV_GroupThreadID,
 	//
 
 	float4 blurColor = float4(0, 0, 0, 0);
+#if defined(EX4)
+    float bilateralWeights[11];
+    float center = groupThreadID.x + gBlurRadius;
+    BilateralWeightPixel(center, bilateralWeights);
+#endif
 	
 	for(int i = -gBlurRadius; i <= gBlurRadius; ++i)
 	{
 		int k = groupThreadID.x + gBlurRadius + i;
 		
+#if defined(EX4)
+        blurColor += weights[i + gBlurRadius] * bilateralWeights[gBlurRadius + i] * gCache[k];
+#else
 		blurColor += weights[i+gBlurRadius]*gCache[k];
-	}
+#endif
+    }
 	
 	gOutput[dispatchThreadID.xy] = blurColor;
 }
 
+
+// Q: why different numthreads?
 [numthreads(1, N, 1)]
 void VertBlurCS(int3 groupThreadID : SV_GroupThreadID,
 				int3 dispatchThreadID : SV_DispatchThreadID)
@@ -123,13 +157,22 @@ void VertBlurCS(int3 groupThreadID : SV_GroupThreadID,
 	//
 
 	float4 blurColor = float4(0, 0, 0, 0);
-	
+#if defined(EX4)
+    float bilateralWeights[11];
+    float center = groupThreadID.y + gBlurRadius;
+    BilateralWeightPixel(center, bilateralWeights);
+#endif
+    
 	for(int i = -gBlurRadius; i <= gBlurRadius; ++i)
 	{
 		int k = groupThreadID.y + gBlurRadius + i;
 		
+#if defined(EX4)
+        blurColor += weights[i + gBlurRadius] * bilateralWeights[gBlurRadius + i] * gCache[k];
+#else
 		blurColor += weights[i+gBlurRadius]*gCache[k];
-	}
+#endif
+    }
 	
 	gOutput[dispatchThreadID.xy] = blurColor;
 }

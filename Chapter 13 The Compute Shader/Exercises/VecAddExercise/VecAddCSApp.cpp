@@ -11,8 +11,8 @@
 #include <cstdlib> // for rand()
 #include <ctime>   // for srand()
 #include <cmath>   // for sqrt
-
 #include <random>
+#include <string>
 
 using Microsoft::WRL::ComPtr;
 using namespace DirectX;
@@ -23,8 +23,9 @@ using namespace DirectX::PackedVector;
 
 const int gNumFrameResources = 3;
 
-#define EX1
+//#define EX1
 //#define EX2
+#define EX3 // unfinished, try reading https://gamedev.stackexchange.com/questions/45722/consumestructuredbuffer-what-am-i-doing-wrong
 
 struct Data
 {
@@ -32,18 +33,19 @@ struct Data
 	XMFLOAT2 v2;
 };
 
-#ifdef EX1
-struct DataInEX1 {
+#if defined(EX1) || defined(EX3)
+struct DataIn {
 	XMFLOAT3 v;
 	float mag;
 };
 
-struct DataOutEX1 {
+struct DataOut {
 	XMFLOAT3 v;
 	float mag;
 	float calMag; // calculation mag
 };
 #endif // EX1
+
 
 
 // Lightweight structure stores parameters to draw a shape.  This will
@@ -108,7 +110,7 @@ private:
     virtual void OnMouseMove(WPARAM btnState, int x, int y)override;
 
 	void DoComputeWork();
-	void DoComputeWorkEX_1_2();
+	void DoComputeWorkEX_1_2_3();
 
 	void BuildBuffers();
     void BuildRootSignature();
@@ -147,7 +149,7 @@ private:
 	// Render items divided by PSO.
 	std::vector<RenderItem*> mRitemLayer[(int)RenderLayer::Count];
 
-#if defined(EX1) || defined(EX2)
+#if defined(EX1) || defined(EX2) || defined(EX3)
 	const int NumDataElements = 64;
 #else
 	const int NumDataElements = 32;
@@ -234,8 +236,8 @@ bool VecAddCSApp::Initialize()
     // Wait until initialization is complete.
     FlushCommandQueue();
 
-#if defined(EX1) || defined(EX2)
-	DoComputeWorkEX_1_2();
+#if defined(EX1) || defined(EX2) || defined(EX3)
+	DoComputeWorkEX_1_2_3();
 #else
 	DoComputeWork();
 #endif
@@ -416,7 +418,7 @@ void VecAddCSApp::DoComputeWork()
 	mReadBackBuffer->Unmap(0, nullptr);
 }
 
-void VecAddCSApp::DoComputeWorkEX_1_2()
+void VecAddCSApp::DoComputeWorkEX_1_2_3()
 {
 	ThrowIfFailed(mDirectCmdListAlloc->Reset());
 
@@ -424,8 +426,13 @@ void VecAddCSApp::DoComputeWorkEX_1_2()
 
 	mCommandList->SetComputeRootSignature(mRootSignature.Get());
 
+#if defined(EX3)
+	mCommandList->SetComputeRootUnorderedAccessView(0, mInputBufferA->GetGPUVirtualAddress());
+	mCommandList->SetComputeRootUnorderedAccessView(1, mOutputBuffer->GetGPUVirtualAddress());
+#else
 	mCommandList->SetComputeRootShaderResourceView(0, mInputBufferA->GetGPUVirtualAddress());
 	mCommandList->SetComputeRootUnorderedAccessView(1, mOutputBuffer->GetGPUVirtualAddress());
+#endif
 
 	mCommandList->Dispatch(1, 1, 1);
 
@@ -449,11 +456,15 @@ void VecAddCSApp::DoComputeWorkEX_1_2()
 	FlushCommandQueue();
 
 	// Map the data so we can read it on CPU.
-#ifdef EX1
-	DataOutEX1* mappedData = nullptr;
+#if defined(EX1) || defined(EX3)
+	DataOut* mappedData = nullptr;
 	ThrowIfFailed(mReadBackBuffer->Map(0, nullptr, reinterpret_cast<void**>(&mappedData)));
 
+#if defined(EX1) 
 	std::ofstream fout("results_ex1.txt");
+#elif defined(EX3)
+	std::ofstream fout("results_ex3.txt");
+#endif
 
 	for (int i = 0; i < NumDataElements; ++i)
 	{
@@ -496,10 +507,10 @@ XMFLOAT3 GenerateRandomVectorInRange(float min, float max, float& mag) {
 	return result;
 }
 
-#if defined(EX1)
+#if defined(EX1) || defined(EX3)
 void VecAddCSApp::BuildBuffers() {
 	// build input data of 64 random vector that have mag in range [1, 10]
-	std::vector<DataInEX1> data(NumDataElements);
+	std::vector<DataIn> data(NumDataElements);
 	for (int i = 0; i < NumDataElements; ++i)
 	{
 		float mag = 0.f;
@@ -507,21 +518,22 @@ void VecAddCSApp::BuildBuffers() {
 		data[i].mag = mag;
 	}
 
-	UINT64 byteSize = data.size() * sizeof(Data);
+	UINT64 byteSizeIn = data.size() * sizeof(DataIn);
+	UINT64 byteSizeOut = data.size() * sizeof(DataOut);
 
 	// Create some buffers to be used as SRVs.
 	mInputBufferA = d3dUtil::CreateDefaultBuffer(
 		md3dDevice.Get(),
 		mCommandList.Get(),
 		data.data(),
-		byteSize,
+		byteSizeIn,
 		mInputUploadBufferA);
 
 	// Create the buffer that will be a UAV.
 	ThrowIfFailed(md3dDevice->CreateCommittedResource(
 		&CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT),
 		D3D12_HEAP_FLAG_NONE,
-		&CD3DX12_RESOURCE_DESC::Buffer(byteSize, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS),
+		&CD3DX12_RESOURCE_DESC::Buffer(byteSizeOut, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS),
 		D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
 		nullptr,
 		IID_PPV_ARGS(&mOutputBuffer)));
@@ -529,7 +541,7 @@ void VecAddCSApp::BuildBuffers() {
 	ThrowIfFailed(md3dDevice->CreateCommittedResource(
 		&CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_READBACK),
 		D3D12_HEAP_FLAG_NONE,
-		&CD3DX12_RESOURCE_DESC::Buffer(byteSize),
+		&CD3DX12_RESOURCE_DESC::Buffer(byteSizeOut),
 		D3D12_RESOURCE_STATE_COPY_DEST,
 		nullptr,
 		IID_PPV_ARGS(&mReadBackBuffer)));
@@ -623,11 +635,17 @@ void VecAddCSApp::BuildBuffers() {
 
 void VecAddCSApp::BuildRootSignature()
 {
-#if defined(EX1) || defined(EX2)
+#if defined(EX1) || defined(EX2) || defined(EX3)
 	CD3DX12_ROOT_PARAMETER slotRootParameter[2];
 
+//#ifdef EX3
+//	slotRootParameter[0].InitAsUnorderedAccessView(0);
+//	slotRootParameter[1].InitAsUnorderedAccessView(1);
+//#else
 	slotRootParameter[0].InitAsShaderResourceView(0);
 	slotRootParameter[1].InitAsUnorderedAccessView(0);
+//#endif // EX3
+
 
 	CD3DX12_ROOT_SIGNATURE_DESC rootSigDesc(2, slotRootParameter, 0, nullptr, D3D12_ROOT_SIGNATURE_FLAG_NONE);
 #else
@@ -677,12 +695,23 @@ void VecAddCSApp::BuildShadersAndInputLayout()
 void VecAddCSApp::BuildPSOs()
 {
 	D3D12_COMPUTE_PIPELINE_STATE_DESC computePsoDesc = {};
+	if (!mRootSignature) {
+		OutputDebugStringA("Error: mRootSignature is nullptr.\n");
+	}
 	computePsoDesc.pRootSignature = mRootSignature.Get();
+
 	computePsoDesc.CS =
 	{
 		reinterpret_cast<BYTE*>(mShaders["vecAddCS"]->GetBufferPointer()),
 		mShaders["vecAddCS"]->GetBufferSize()
 	};
+	if (mShaders["vecAddCS"] == nullptr) {
+		OutputDebugStringA("Error: mShaders[\"vecAddCS\"] is nullptr.\n");
+	}
+	else {
+		OutputDebugStringA("Shader loaded successfully.\n");
+		std::string sizeString = std::to_string(mShaders["vecAddCS"]->GetBufferSize());
+	}
 	computePsoDesc.Flags = D3D12_PIPELINE_STATE_FLAG_NONE;
 	ThrowIfFailed(md3dDevice->CreateComputePipelineState(&computePsoDesc, IID_PPV_ARGS(&mPSOs["vecAdd"])));
 }
