@@ -2,7 +2,8 @@
 // Performs a separable Guassian blur with a blur radius up to 5 pixels.
 //=============================================================================
 
-#define EX4 // wrong algorithm, but sort of work
+#define EX4 // same macro in BlurFilter.cpp
+// ref: https://blog.csdn.net/juwell0512/article/details/52276193
 
 cbuffer cbSettings : register(b0)
 {
@@ -35,24 +36,18 @@ RWTexture2D<float4> gOutput : register(u0);
 #define CacheSize (N + 2*gMaxBlurRadius)
 groupshared float4 gCache[CacheSize];
 
+float pixelDiffWeight(float4 p1, float4 p2)
+{
+    return -pow((p1.r * 255 + p1.g * 255 + p1.b * 255) - (p2.r * 255 + p2.g * 255 + p2.b * 255), 2);
+}
+
 void BilateralWeightPixel(float center, out float result[11])
 {
-    float weightTotal = 0.0f;
     float twoSigma2 = 2.0f * bilateralSigma * bilateralSigma;
     for (int i = -gBlurRadius; i <= gBlurRadius; ++i)
     {
         int k = center + i;
-        float diff = length(gCache[k] - gCache[center]);
-        //result[i + gBlurRadius] = exp(-diff * diff / twoSigma2);
-        result[i + gBlurRadius] = exp(-diff * diff / twoSigma2);
-        //weightTotal += result[i + gBlurRadius];        
-		weightTotal += diff;
-    }
-	
-    for (int j = 0; j <= 10; ++j)
-    {
-        //result[j] /= weightTotal;
-        result[j] /= (weightTotal + 1.0);
+        result[i + gBlurRadius] = pixelDiffWeight(gCache[center], gCache[k]) / twoSigma2;
     }
 }
 
@@ -96,6 +91,7 @@ void HorzBlurCS(int3 groupThreadID : SV_GroupThreadID,
 
 	float4 blurColor = float4(0, 0, 0, 0);
 #if defined(EX4)
+    float weightTotal = 0.0f;
     float bilateralWeights[11];
     float center = groupThreadID.x + gBlurRadius;
     BilateralWeightPixel(center, bilateralWeights);
@@ -106,13 +102,21 @@ void HorzBlurCS(int3 groupThreadID : SV_GroupThreadID,
 		int k = groupThreadID.x + gBlurRadius + i;
 		
 #if defined(EX4)
-        blurColor += weights[i + gBlurRadius] * bilateralWeights[gBlurRadius + i] * gCache[k];
+        float wp_i = exp(weights[i + gBlurRadius] + bilateralWeights[gBlurRadius + i]);
+        blurColor += wp_i * gCache[k];
+        weightTotal += wp_i;
 #else
 		blurColor += weights[i+gBlurRadius]*gCache[k];
 #endif
     }
+
+#if defined(EX4)
+    blurColor.r /= (weightTotal);
+    blurColor.g /= (weightTotal);
+    blurColor.b /= (weightTotal);
+#endif
 	
-	gOutput[dispatchThreadID.xy] = blurColor;
+	gOutput[dispatchThreadID.xy] = blurColor ;
 }
 
 
@@ -158,6 +162,7 @@ void VertBlurCS(int3 groupThreadID : SV_GroupThreadID,
 
 	float4 blurColor = float4(0, 0, 0, 0);
 #if defined(EX4)
+    float weightTotal = 0.0f;
     float bilateralWeights[11];
     float center = groupThreadID.y + gBlurRadius;
     BilateralWeightPixel(center, bilateralWeights);
@@ -168,11 +173,19 @@ void VertBlurCS(int3 groupThreadID : SV_GroupThreadID,
 		int k = groupThreadID.y + gBlurRadius + i;
 		
 #if defined(EX4)
-        blurColor += weights[i + gBlurRadius] * bilateralWeights[gBlurRadius + i] * gCache[k];
+        float wp_i = exp(weights[i + gBlurRadius] + bilateralWeights[gBlurRadius + i]);
+        blurColor += wp_i * gCache[k];
+        weightTotal += wp_i;
 #else
 		blurColor += weights[i+gBlurRadius]*gCache[k];
 #endif
     }
+	
+#if defined(EX4)
+    blurColor.r /= (weightTotal);
+    blurColor.g /= (weightTotal);
+    blurColor.b /= (weightTotal);
+#endif
 	
 	gOutput[dispatchThreadID.xy] = blurColor;
 }

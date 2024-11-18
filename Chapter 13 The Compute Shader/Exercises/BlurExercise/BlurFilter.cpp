@@ -3,7 +3,9 @@
 //***************************************************************************************
 
 #include "BlurFilter.h"
- 
+
+#define EX4 // same macro in Blur.hlsl
+
 BlurFilter::BlurFilter(ID3D12Device* device, 
 	                   UINT width, UINT height,
                        DXGI_FORMAT format)
@@ -143,12 +145,14 @@ std::vector<float> BlurFilter::CalcGaussWeights(float sigma)
 	
 	float weightSum = 0.0f;
 
-	for(int i = -blurRadius; i <= blurRadius; ++i)
+	for (int i = -blurRadius; i <= blurRadius; ++i)
 	{
 		float x = (float)i;
 
-		weights[i+blurRadius] = expf(-x*x / twoSigma2);
-
+		weights[i + blurRadius] = expf(-x * x / twoSigma2);
+#if defined(EX4)
+	}
+#else
 		weightSum += weights[i+blurRadius];
 	}
 
@@ -157,6 +161,7 @@ std::vector<float> BlurFilter::CalcGaussWeights(float sigma)
 	{
 		weights[i] /= weightSum;
 	}
+#endif
 
 	return weights;
 }
