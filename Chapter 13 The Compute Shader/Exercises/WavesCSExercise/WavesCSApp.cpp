@@ -6,8 +6,11 @@
 #include "../Common/MathHelper.h"
 #include "../Common/UploadBuffer.h"
 #include "../Common/GeometryGenerator.h"
+//#include "../Common/MiniDump.h"
 #include "FrameResource.h"
 #include "GpuWaves.h"
+
+#define EX6
 
 using Microsoft::WRL::ComPtr;
 using namespace DirectX;
@@ -95,6 +98,7 @@ private:
 	void LoadTextures();
     void BuildRootSignature();
 	void BuildWavesRootSignature();
+	void BuildPostProcessRootSignature(); // EX6
 	void BuildDescriptorHeaps();
     void BuildShadersAndInputLayout();
     void BuildLandGeometry();
@@ -121,6 +125,7 @@ private:
 
     ComPtr<ID3D12RootSignature> mRootSignature = nullptr;
 	ComPtr<ID3D12RootSignature> mWavesRootSignature = nullptr;
+	ComPtr<ID3D12RootSignature> mPostProcessRootSignature = nullptr; // EX6
 
 	ComPtr<ID3D12DescriptorHeap> mSrvDescriptorHeap = nullptr;
 
@@ -159,6 +164,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE prevInstance,
     // Enable run-time memory check for debug builds.
 #if defined(DEBUG) | defined(_DEBUG)
     _CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF);
+	//SetUnhandledExceptionFilter(CustomUnhandledExceptionFilter);
 #endif
 
     try
@@ -300,6 +306,7 @@ void WavesCSApp::Draw(const GameTimer& gt)
 	auto passCB = mCurrFrameResource->PassCB->Resource();
 	mCommandList->SetGraphicsRootConstantBufferView(2, passCB->GetGPUVirtualAddress());
 
+	// NOTE: how to pass CS result into Default.hlsl
 	mCommandList->SetGraphicsRootDescriptorTable(4, mWaves->DisplacementMap());
 
     DrawRenderItems(mCommandList.Get(), mRitemLayer[(int)RenderLayer::Opaque]);
@@ -569,8 +576,16 @@ void WavesCSApp::BuildRootSignature()
 	CD3DX12_DESCRIPTOR_RANGE displacementMapTable;
 	displacementMapTable.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 1);
 
-    // Root parameter can be a table, root descriptor or root constants.
-    CD3DX12_ROOT_PARAMETER slotRootParameter[5];
+#if defined(EX6)
+	CD3DX12_DESCRIPTOR_RANGE sobelOpMapTable;
+	sobelOpMapTable.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 2);
+
+	// Root parameter can be a table, root descriptor or root constants.
+	CD3DX12_ROOT_PARAMETER slotRootParameter[6];
+#else
+	// Root parameter can be a table, root descriptor or root constants.
+	CD3DX12_ROOT_PARAMETER slotRootParameter[5];
+#endif
 
 	// Perfomance TIP: Order from most frequent to least frequent.
 	slotRootParameter[0].InitAsDescriptorTable(1, &texTable, D3D12_SHADER_VISIBILITY_ALL);
@@ -578,13 +593,18 @@ void WavesCSApp::BuildRootSignature()
     slotRootParameter[2].InitAsConstantBufferView(1);
     slotRootParameter[3].InitAsConstantBufferView(2);
 	slotRootParameter[4].InitAsDescriptorTable(1, &displacementMapTable, D3D12_SHADER_VISIBILITY_ALL);
+#if defined(EX6)
+	slotRootParameter[5].InitAsDescriptorTable(1, &sobelOpMapTable, D3D12_SHADER_VISIBILITY_ALL);
+#endif
 
 	auto staticSamplers = GetStaticSamplers();
 
     // A root signature is an array of root parameters.
-	CD3DX12_ROOT_SIGNATURE_DESC rootSigDesc(5, slotRootParameter,
-		(UINT)staticSamplers.size(), staticSamplers.data(),
-		D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
+#if defined(EX6)
+	CD3DX12_ROOT_SIGNATURE_DESC rootSigDesc(6, slotRootParameter, (UINT)staticSamplers.size(), staticSamplers.data(), D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
+#else
+	CD3DX12_ROOT_SIGNATURE_DESC rootSigDesc(5, slotRootParameter, (UINT)staticSamplers.size(), staticSamplers.data(), D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
+#endif
 
     // create a root signature with a single slot which points to a descriptor range consisting of a single constant buffer
     ComPtr<ID3DBlob> serializedRootSig = nullptr;
@@ -649,6 +669,46 @@ void WavesCSApp::BuildWavesRootSignature()
 		IID_PPV_ARGS(mWavesRootSignature.GetAddressOf())));
 }
 
+void WavesCSApp::BuildPostProcessRootSignature()
+{
+	CD3DX12_DESCRIPTOR_RANGE srvTable;
+	srvTable.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0);
+
+	CD3DX12_DESCRIPTOR_RANGE uavTable;
+	uavTable.Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0);
+
+	// Root parameter can be a table, root descriptor or root constants.
+	CD3DX12_ROOT_PARAMETER slotRootParameter[2];
+
+	// Perfomance TIP: Order from most frequent to least frequent.
+	slotRootParameter[0].InitAsDescriptorTable(1, &srvTable);
+	slotRootParameter[1].InitAsDescriptorTable(1, &uavTable);
+
+	// A root signature is an array of root parameters.
+	CD3DX12_ROOT_SIGNATURE_DESC rootSigDesc(2, slotRootParameter,
+		0, nullptr,
+		D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
+
+	// create a root signature with a single slot which points to a descriptor range consisting of a single constant buffer
+	ComPtr<ID3DBlob> serializedRootSig = nullptr;
+	ComPtr<ID3DBlob> errorBlob = nullptr;
+	HRESULT hr = D3D12SerializeRootSignature(&rootSigDesc, D3D_ROOT_SIGNATURE_VERSION_1,
+		serializedRootSig.GetAddressOf(), errorBlob.GetAddressOf());
+
+	if (errorBlob != nullptr)
+	{
+		::OutputDebugStringA((char*)errorBlob->GetBufferPointer());
+	}
+	ThrowIfFailed(hr);
+
+	ThrowIfFailed(md3dDevice->CreateRootSignature(
+		0,
+		serializedRootSig->GetBufferPointer(),
+		serializedRootSig->GetBufferSize(),
+		IID_PPV_ARGS(mPostProcessRootSignature.GetAddressOf())));
+}
+
+// TODO: 和 BlurExercise 对比着做，需要设置 SobelOp 的描述符
 void WavesCSApp::BuildDescriptorHeaps()
 {
 	UINT srvCount = 3;
@@ -724,6 +784,10 @@ void WavesCSApp::BuildShadersAndInputLayout()
 	mShaders["alphaTestedPS"] = d3dUtil::CompileShader(L"Shaders\\Default.hlsl", alphaTestDefines, "PS", "ps_5_0");
 	mShaders["wavesUpdateCS"] = d3dUtil::CompileShader(L"Shaders\\WaveSim.hlsl", nullptr, "UpdateWavesCS", "cs_5_0");
 	mShaders["wavesDisturbCS"] = d3dUtil::CompileShader(L"Shaders\\WaveSim.hlsl", nullptr, "DisturbWavesCS", "cs_5_0");
+#ifdef EX6
+	mShaders["sobelOpCS"] = d3dUtil::CompileShader(L"Shaders\\SobelOpCS.hlsl", nullptr, "SobelCS", "cs_5_0");
+#endif // EX6
+
 
     mInputLayout =
     {
@@ -988,6 +1052,21 @@ void WavesCSApp::BuildPSOs()
 	};
 	wavesUpdatePSO.Flags = D3D12_PIPELINE_STATE_FLAG_NONE;
 	ThrowIfFailed(md3dDevice->CreateComputePipelineState(&wavesUpdatePSO, IID_PPV_ARGS(&mPSOs["wavesUpdate"])));
+
+#ifdef EX6
+	//
+	// PSO for calculating Sobel operation
+	//
+	D3D12_COMPUTE_PIPELINE_STATE_DESC sobelOpPSO = {};
+	sobelOpPSO.pRootSignature = mPostProcessRootSignature.Get();
+	sobelOpPSO.CS =
+	{
+		reinterpret_cast<BYTE*>(mShaders["sobelOpCS"]->GetBufferPointer()),
+		mShaders["sobelOpCS"]->GetBufferSize()
+	};
+	sobelOpPSO.Flags = D3D12_PIPELINE_STATE_FLAG_NONE;
+	ThrowIfFailed(md3dDevice->CreateComputePipelineState(&sobelOpPSO, IID_PPV_ARGS(&mShaders["sobelOpCS"])));
+#endif
 }
 
 void WavesCSApp::BuildFrameResources()

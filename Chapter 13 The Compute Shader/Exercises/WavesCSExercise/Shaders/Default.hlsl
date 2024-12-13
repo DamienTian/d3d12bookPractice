@@ -17,11 +17,16 @@
     #define NUM_SPOT_LIGHTS 0
 #endif
 
+#define EX6
+
 // Include structures and functions for lighting.
 #include "LightingUtil.hlsl"
 
-Texture2D    gDiffuseMap : register(t0);
-Texture2D    gDisplacementMap : register(t1);
+Texture2D gDiffuseMap : register(t0);
+Texture2D gDisplacementMap : register(t1);
+#if defined(EX6)
+Texture2D<float4> gSobelOpMap : register(t2);
+#endif
 
 SamplerState gsamPointWrap        : register(s0);
 SamplerState gsamPointClamp       : register(s1);
