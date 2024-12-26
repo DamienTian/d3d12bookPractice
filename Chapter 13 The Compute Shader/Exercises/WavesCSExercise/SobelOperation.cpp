@@ -16,6 +16,11 @@ SobelOperation::SobelOperation(ID3D12Device* device, UINT width, UINT height, DX
 	BuildResources();
 }
 
+UINT SobelOperation::DescriptorCount() const
+{
+	return 2;
+}
+
 ID3D12Resource* SobelOperation::Output()
 {
 	return mOutput.Get();
@@ -67,13 +72,13 @@ void SobelOperation::Execute(ID3D12GraphicsCommandList* cmdList, ID3D12RootSigna
 
 	cmdList->SetPipelineState(sobelOpPSO);
 
-	cmdList->SetComputeRootDescriptorTable(1, mInputGpuSrv);
-	cmdList->SetComputeRootDescriptorTable(2, mOutputGpuUav);
+	cmdList->SetComputeRootDescriptorTable(0, mInputGpuSrv);
+	cmdList->SetComputeRootDescriptorTable(1, mOutputGpuUav);
 
 	// NOTE: the better way is doing horizontal and vertical seperately like BlurFilter::Execute() (in BlurApp) does.
 	//		but I use the less efficient version here.
-	UINT numGroupsX = (UINT)ceilf(mWidth / 256.0f);
-	UINT numGroupsY = (UINT)ceilf(mHeight / 256.0f);
+	UINT numGroupsX = (UINT)ceilf(mWidth / 32.f);
+	UINT numGroupsY = (UINT)ceilf(mHeight / 32.f);
 	cmdList->Dispatch(numGroupsX, numGroupsY, 1);
 }
 
@@ -116,11 +121,17 @@ void SobelOperation::BuildResources()
 		&CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT),
 		D3D12_HEAP_FLAG_NONE,
 		&texDesc,
-		D3D12_RESOURCE_STATE_COMMON,
+		D3D12_RESOURCE_STATE_GENERIC_READ,
 		nullptr,
 		IID_PPV_ARGS(&mInput)));
 
-	// 看 GPT，这里也许需要 CreateCommittedResource( mOutput )
+	ThrowIfFailed(md3dDevice->CreateCommittedResource(
+		&CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT),
+		D3D12_HEAP_FLAG_NONE,
+		&texDesc,
+		D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+		nullptr,
+		IID_PPV_ARGS(&mOutput)));
 }
 
 

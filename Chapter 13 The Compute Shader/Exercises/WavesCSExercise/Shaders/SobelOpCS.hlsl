@@ -13,7 +13,7 @@ float CalcLuminance(float3 color)
     return dot(color, float3(0.299f, 0.587f, 0.114f));
 }
 
-[numthreads(16, 16, 1)]
+[numthreads(32, 32, 1)]
 void SobelCS(int3 dispatchThreadID : SV_DispatchThreadID)
 {
     // Sample the pixels in the neighborhood of this pixel.

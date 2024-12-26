@@ -9,6 +9,7 @@
 //#include "../Common/MiniDump.h"
 #include "FrameResource.h"
 #include "GpuWaves.h"
+#include "SobelOperation.h"
 
 #define EX6
 
@@ -144,6 +145,7 @@ private:
 	std::vector<RenderItem*> mRitemLayer[(int)RenderLayer::Count];
 
 	std::unique_ptr<GpuWaves> mWaves;
+	std::unique_ptr<SobelOperation> mSobelOp;
 
     PassConstants mMainPassCB;
 
@@ -209,10 +211,17 @@ bool WavesCSApp::Initialize()
 		md3dDevice.Get(), 
 		mCommandList.Get(),
 		256, 256, 0.25f, 0.03f, 2.0f, 0.2f);
- 
+
+#ifdef EX6
+	mSobelOp = std::make_unique<SobelOperation>(md3dDevice.Get(), mClientWidth, mClientHeight, DXGI_FORMAT_R8G8B8A8_UNORM);
+#endif // EX6
+
 	LoadTextures();
     BuildRootSignature();
 	BuildWavesRootSignature();
+#ifdef EX6
+	BuildPostProcessRootSignature();
+#endif // EX6
 	BuildDescriptorHeaps();
     BuildShadersAndInputLayout();
     BuildLandGeometry();
@@ -241,6 +250,12 @@ void WavesCSApp::OnResize()
     // The window resized, so update the aspect ratio and recompute the projection matrix.
     XMMATRIX P = XMMatrixPerspectiveFovLH(0.25f*MathHelper::Pi, AspectRatio(), 1.0f, 1000.0f);
     XMStoreFloat4x4(&mProj, P);
+
+#ifdef EX6
+	if (mSobelOp) {
+		mSobelOp->OnResize(mClientWidth, mClientHeight);
+	}
+#endif // EX6
 }
 
 void WavesCSApp::Update(const GameTimer& gt)
@@ -306,7 +321,7 @@ void WavesCSApp::Draw(const GameTimer& gt)
 	auto passCB = mCurrFrameResource->PassCB->Resource();
 	mCommandList->SetGraphicsRootConstantBufferView(2, passCB->GetGPUVirtualAddress());
 
-	// NOTE: how to pass CS result into Default.hlsl
+	// NOTE: this is how to pass CS result into Default.hlsl
 	mCommandList->SetGraphicsRootDescriptorTable(4, mWaves->DisplacementMap());
 
     DrawRenderItems(mCommandList.Get(), mRitemLayer[(int)RenderLayer::Opaque]);
@@ -320,9 +335,23 @@ void WavesCSApp::Draw(const GameTimer& gt)
 	mCommandList->SetPipelineState(mPSOs["wavesRender"].Get());
 	DrawRenderItems(mCommandList.Get(), mRitemLayer[(int)RenderLayer::GpuWaves]);
 
-    // Indicate a state transition on the resource usage.
+#ifdef EX6
+	mSobelOp->Execute(mCommandList.Get(), mPostProcessRootSignature.Get(), mPSOs["sobelOp"].Get(), CurrentBackBuffer());
+
+	// Prepare to copy sobel operation output to the back buffer.
+	mCommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(CurrentBackBuffer(),
+		D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_COPY_DEST));
+
+	mCommandList->CopyResource(CurrentBackBuffer(), mSobelOp->Output());
+
+	// Transition to PRESENT state.
+	mCommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(CurrentBackBuffer(),
+		D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_PRESENT));
+#else
+	// Indicate a state transition on the resource usage.
 	mCommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(CurrentBackBuffer(),
 		D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT));
+#endif // EX6
 
     // Done recording commands.
     ThrowIfFailed(mCommandList->Close());
@@ -685,8 +714,7 @@ void WavesCSApp::BuildPostProcessRootSignature()
 	slotRootParameter[1].InitAsDescriptorTable(1, &uavTable);
 
 	// A root signature is an array of root parameters.
-	CD3DX12_ROOT_SIGNATURE_DESC rootSigDesc(2, slotRootParameter,
-		0, nullptr,
+	CD3DX12_ROOT_SIGNATURE_DESC rootSigDesc(2, slotRootParameter, 0, nullptr,
 		D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
 
 	// create a root signature with a single slot which points to a descriptor range consisting of a single constant buffer
@@ -708,7 +736,6 @@ void WavesCSApp::BuildPostProcessRootSignature()
 		IID_PPV_ARGS(mPostProcessRootSignature.GetAddressOf())));
 }
 
-// TODO: 和 BlurExercise 对比着做，需要设置 SobelOp 的描述符
 void WavesCSApp::BuildDescriptorHeaps()
 {
 	UINT srvCount = 3;
@@ -717,7 +744,12 @@ void WavesCSApp::BuildDescriptorHeaps()
 	// Create the SRV heap.
 	//
 	D3D12_DESCRIPTOR_HEAP_DESC srvHeapDesc = {};
+#ifdef EX6
+	srvHeapDesc.NumDescriptors = srvCount + mWaves->DescriptorCount() + mSobelOp->DescriptorCount();
+#else
 	srvHeapDesc.NumDescriptors = srvCount + mWaves->DescriptorCount();
+#endif // EX6
+
 	srvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
 	srvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
 	ThrowIfFailed(md3dDevice->CreateDescriptorHeap(&srvHeapDesc, IID_PPV_ARGS(&mSrvDescriptorHeap)));
@@ -755,6 +787,15 @@ void WavesCSApp::BuildDescriptorHeaps()
 		CD3DX12_CPU_DESCRIPTOR_HANDLE(mSrvDescriptorHeap->GetCPUDescriptorHandleForHeapStart(), srvCount, mCbvSrvDescriptorSize),
 		CD3DX12_GPU_DESCRIPTOR_HANDLE(mSrvDescriptorHeap->GetGPUDescriptorHandleForHeapStart(), srvCount, mCbvSrvDescriptorSize),
 		mCbvSrvDescriptorSize);
+
+#ifdef EX6
+	mSobelOp->BuildDescriptors(
+		CD3DX12_CPU_DESCRIPTOR_HANDLE(mSrvDescriptorHeap->GetCPUDescriptorHandleForHeapStart(), 
+			srvCount + mWaves->DescriptorCount(), mCbvSrvDescriptorSize),
+		CD3DX12_GPU_DESCRIPTOR_HANDLE(mSrvDescriptorHeap->GetGPUDescriptorHandleForHeapStart(), 
+			srvCount + mWaves->DescriptorCount(), mCbvSrvDescriptorSize),
+		mCbvSrvDescriptorSize);
+#endif // EX6
 }
 
 void WavesCSApp::BuildShadersAndInputLayout()
@@ -787,7 +828,6 @@ void WavesCSApp::BuildShadersAndInputLayout()
 #ifdef EX6
 	mShaders["sobelOpCS"] = d3dUtil::CompileShader(L"Shaders\\SobelOpCS.hlsl", nullptr, "SobelCS", "cs_5_0");
 #endif // EX6
-
 
     mInputLayout =
     {
@@ -1065,7 +1105,7 @@ void WavesCSApp::BuildPSOs()
 		mShaders["sobelOpCS"]->GetBufferSize()
 	};
 	sobelOpPSO.Flags = D3D12_PIPELINE_STATE_FLAG_NONE;
-	ThrowIfFailed(md3dDevice->CreateComputePipelineState(&sobelOpPSO, IID_PPV_ARGS(&mShaders["sobelOpCS"])));
+	ThrowIfFailed(md3dDevice->CreateComputePipelineState(&sobelOpPSO, IID_PPV_ARGS(&mPSOs["sobelOp"])));
 #endif
 }
 

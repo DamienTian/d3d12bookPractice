@@ -25,6 +25,8 @@ public:
 	SobelOperation& operator=(const SobelOperation& rhs) = delete;
 	~SobelOperation() = default;
 
+	UINT DescriptorCount() const;
+
 	ID3D12Resource* Output();
 
 	void BuildDescriptors(CD3DX12_CPU_DESCRIPTOR_HANDLE hCpuDescriptor,CD3DX12_GPU_DESCRIPTOR_HANDLE hGpuDescriptor, UINT descriptorSize);
