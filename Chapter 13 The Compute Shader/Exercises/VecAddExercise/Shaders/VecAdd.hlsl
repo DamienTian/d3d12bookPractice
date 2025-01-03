@@ -1,6 +1,6 @@
 //#define EX1
-//#define EX2
-#define EX3
+#define EX2
+//#define EX3
 
 
 struct DataIn
@@ -40,18 +40,14 @@ void CS(int3 dtid : SV_DispatchThreadID)
 }
 #elif defined(EX3)
 
-ConsumeStructuredBuffer<DataIn> gInput : register(t0);
-AppendStructuredBuffer<DataOut> gOutput : register(u0);
+ConsumeStructuredBuffer<float3> gInput : register(t0);
+AppendStructuredBuffer<float> gOutput : register(u1);
 
 [numthreads(64, 1, 1)]
 void CS()
 {
-    DataIn di = gInput.Consume();
-    DataOut doo;
-    doo.v = di.v;
-    doo.mag = di.mag;
-    doo.calMag = length(di.v);
-    gOutput.Append(doo);
+    float3 di = gInput.Consume();
+    gOutput.Append(length(di));
 }
 #else // origin
 struct Data

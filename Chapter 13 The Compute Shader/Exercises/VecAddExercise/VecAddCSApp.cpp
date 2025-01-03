@@ -24,8 +24,8 @@ using namespace DirectX::PackedVector;
 const int gNumFrameResources = 3;
 
 //#define EX1
-//#define EX2
-#define EX3 // unfinished, try reading https://gamedev.stackexchange.com/questions/45722/consumestructuredbuffer-what-am-i-doing-wrong
+#define EX2
+//#define EX3 // unfinished, try reading https://gamedev.stackexchange.com/questions/45722/consumestructuredbuffer-what-am-i-doing-wrong
 
 struct Data
 {
@@ -33,7 +33,7 @@ struct Data
 	XMFLOAT2 v2;
 };
 
-#if defined(EX1) || defined(EX3)
+#if defined(EX1)/* || defined(EX3)*/
 struct DataIn {
 	XMFLOAT3 v;
 	float mag;
@@ -426,13 +426,13 @@ void VecAddCSApp::DoComputeWorkEX_1_2_3()
 
 	mCommandList->SetComputeRootSignature(mRootSignature.Get());
 
-#if defined(EX3)
-	mCommandList->SetComputeRootUnorderedAccessView(0, mInputBufferA->GetGPUVirtualAddress());
-	mCommandList->SetComputeRootUnorderedAccessView(1, mOutputBuffer->GetGPUVirtualAddress());
-#else
+//#if defined(EX3)
+//	mCommandList->SetComputeRootUnorderedAccessView(0, mInputBufferA->GetGPUVirtualAddress());
+//	mCommandList->SetComputeRootUnorderedAccessView(1, mOutputBuffer->GetGPUVirtualAddress());
+//#else
 	mCommandList->SetComputeRootShaderResourceView(0, mInputBufferA->GetGPUVirtualAddress());
 	mCommandList->SetComputeRootUnorderedAccessView(1, mOutputBuffer->GetGPUVirtualAddress());
-#endif
+//#endif
 
 	mCommandList->Dispatch(1, 1, 1);
 
@@ -456,26 +456,26 @@ void VecAddCSApp::DoComputeWorkEX_1_2_3()
 	FlushCommandQueue();
 
 	// Map the data so we can read it on CPU.
-#if defined(EX1) || defined(EX3)
+#if defined(EX1)
 	DataOut* mappedData = nullptr;
 	ThrowIfFailed(mReadBackBuffer->Map(0, nullptr, reinterpret_cast<void**>(&mappedData)));
 
-#if defined(EX1) 
 	std::ofstream fout("results_ex1.txt");
-#elif defined(EX3)
-	std::ofstream fout("results_ex3.txt");
-#endif
 
 	for (int i = 0; i < NumDataElements; ++i)
 	{
 		fout << "(" << mappedData[i].v.x << ", " << mappedData[i].v.y << ", " << mappedData[i].v.z <<
 			", " << mappedData[i].mag << " ===> " << mappedData[i].calMag << ")" << std::endl;
 	}
-#elif defined(EX2)
+#elif defined(EX2) || defined(EX3)
 	float* mappedData = nullptr;
 	ThrowIfFailed(mReadBackBuffer->Map(0, nullptr, reinterpret_cast<void**>(&mappedData)));
 
+#if defined(EX2)
 	std::ofstream fout("results_ex2.txt");
+#elif defined(EX3)
+	std::ofstream fout("results_ex3.txt");
+#endif
 
 	for (int i = 0; i < NumDataElements; ++i) {
 		fout << mappedData[i] << std::endl;
@@ -507,7 +507,7 @@ XMFLOAT3 GenerateRandomVectorInRange(float min, float max, float& mag) {
 	return result;
 }
 
-#if defined(EX1) || defined(EX3)
+#if defined(EX1)
 void VecAddCSApp::BuildBuffers() {
 	// build input data of 64 random vector that have mag in range [1, 10]
 	std::vector<DataIn> data(NumDataElements);
@@ -546,7 +546,7 @@ void VecAddCSApp::BuildBuffers() {
 		nullptr,
 		IID_PPV_ARGS(&mReadBackBuffer)));
 }
-#elif defined(EX2)
+#elif defined(EX2) || defined(EX3)
 void VecAddCSApp::BuildBuffers() {
 	// build input data of 64 random vector that have mag in range [1, 10]
 	std::vector<XMFLOAT3> data(NumDataElements);
@@ -713,7 +713,12 @@ void VecAddCSApp::BuildPSOs()
 		std::string sizeString = std::to_string(mShaders["vecAddCS"]->GetBufferSize());
 	}
 	computePsoDesc.Flags = D3D12_PIPELINE_STATE_FLAG_NONE;
-	ThrowIfFailed(md3dDevice->CreateComputePipelineState(&computePsoDesc, IID_PPV_ARGS(&mPSOs["vecAdd"])));
+	HRESULT hr = md3dDevice->CreateComputePipelineState(&computePsoDesc, IID_PPV_ARGS(&mPSOs["vecAdd"]));
+	if (FAILED(hr))
+	{
+		OutputDebugStringA("Failed to create ComputePipelineState.\n");
+		OutputDebugStringA(std::to_string(hr).c_str());
+	}
 }
 
 void VecAddCSApp::BuildFrameResources()
