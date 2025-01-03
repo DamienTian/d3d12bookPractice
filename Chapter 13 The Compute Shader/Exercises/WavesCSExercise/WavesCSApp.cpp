@@ -99,7 +99,10 @@ private:
 	void LoadTextures();
     void BuildRootSignature();
 	void BuildWavesRootSignature();
-	void BuildPostProcessRootSignature(); // EX6
+	void BuildPostProcessRootSignature(); // EX6: Sobel CS root signature
+	void BuildCompositeRootSignature();	// EX6: for combine base result & sobel op result
+	void BuildOffScreenRenderTarget(); // EX6: build off screen render target
+	void BuildOffScreenDescriptorHeaps(); // EX6: build off screen 
 	void BuildDescriptorHeaps();
     void BuildShadersAndInputLayout();
     void BuildLandGeometry();
@@ -127,8 +130,13 @@ private:
     ComPtr<ID3D12RootSignature> mRootSignature = nullptr;
 	ComPtr<ID3D12RootSignature> mWavesRootSignature = nullptr;
 	ComPtr<ID3D12RootSignature> mPostProcessRootSignature = nullptr; // EX6
+	ComPtr<ID3D12RootSignature> mCompositeRootSignature = nullptr; // EX6
+
+	Microsoft::WRL::ComPtr<ID3D12Resource> mOffScreenRenderTarget; // EX6
+	CD3DX12_CPU_DESCRIPTOR_HANDLE mOffScreenRtvHandle; // EX6
 
 	ComPtr<ID3D12DescriptorHeap> mSrvDescriptorHeap = nullptr;
+	ComPtr<ID3D12DescriptorHeap> mOffScreenRtvDescriptorHeap = nullptr; // EX6
 
 	std::unordered_map<std::string, std::unique_ptr<MeshGeometry>> mGeometries;
 	std::unordered_map<std::string, std::unique_ptr<Material>> mMaterials;
@@ -220,7 +228,10 @@ bool WavesCSApp::Initialize()
     BuildRootSignature();
 	BuildWavesRootSignature();
 #ifdef EX6
+	BuildOffScreenRenderTarget();
 	BuildPostProcessRootSignature();
+	BuildCompositeRootSignature();
+	BuildOffScreenDescriptorHeaps();
 #endif // EX6
 	BuildDescriptorHeaps();
     BuildShadersAndInputLayout();
@@ -300,10 +311,10 @@ void WavesCSApp::Draw(const GameTimer& gt)
 
 	UpdateWavesGPU(gt);
 
-	mCommandList->SetPipelineState(mPSOs["opaque"].Get());
-
     mCommandList->RSSetViewports(1, &mScreenViewport);
     mCommandList->RSSetScissorRects(1, &mScissorRect);
+
+	mCommandList->SetPipelineState(mPSOs["opaque"].Get());
 
     // Indicate a state transition on the resource usage.
 	mCommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(CurrentBackBuffer(),
@@ -311,10 +322,16 @@ void WavesCSApp::Draw(const GameTimer& gt)
 
     // Clear the back buffer and depth buffer.
     mCommandList->ClearRenderTargetView(CurrentBackBufferView(), (float*)&mMainPassCB.FogColor, 0, nullptr);
+    mCommandList->ClearRenderTargetView(mOffScreenRtvHandle, (float*)&mMainPassCB.FogColor, 0, nullptr);
     mCommandList->ClearDepthStencilView(DepthStencilView(), D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0, 0, nullptr);
 
-    // Specify the buffers we are going to render to.
-    mCommandList->OMSetRenderTargets(1, &CurrentBackBufferView(), true, &DepthStencilView());
+#ifdef EX6
+	// Render the base map on a off screen texture, so can be used later
+	mCommandList->OMSetRenderTargets(1, &mOffScreenRtvHandle, false, &DepthStencilView());
+#else
+	// Specify the buffers we are going to render to.
+	mCommandList->OMSetRenderTargets(1, &CurrentBackBufferView(), true, &DepthStencilView());
+#endif // EX6
 
 	mCommandList->SetGraphicsRootSignature(mRootSignature.Get());
 
@@ -335,23 +352,33 @@ void WavesCSApp::Draw(const GameTimer& gt)
 	mCommandList->SetPipelineState(mPSOs["wavesRender"].Get());
 	DrawRenderItems(mCommandList.Get(), mRitemLayer[(int)RenderLayer::GpuWaves]);
 
+	
 #ifdef EX6
-	mSobelOp->Execute(mCommandList.Get(), mPostProcessRootSignature.Get(), mPSOs["sobelOp"].Get(), CurrentBackBuffer());
+	mCommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(mOffScreenRenderTarget.Get(),
+		D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE));
+	mSobelOp->Execute(mCommandList.Get(), mPostProcessRootSignature.Get(), mPSOs["sobelOpCS"].Get(), mOffScreenRenderTarget.Get());
 
-	// Prepare to copy sobel operation output to the back buffer.
+	// TODO: composite base & sobel op render result together 
+
+	// Output Sobel op output directly, but cannot combine base render result from here
+	//	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-	
 	mCommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(CurrentBackBuffer(),
 		D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_COPY_DEST));
-
 	mCommandList->CopyResource(CurrentBackBuffer(), mSobelOp->Output());
-
-	// Transition to PRESENT state.
 	mCommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(CurrentBackBuffer(),
 		D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_PRESENT));
+	//	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-	
+
+	mCommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(mOffScreenRenderTarget.Get(),
+		D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET));
 #else
 	// Indicate a state transition on the resource usage.
 	mCommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(CurrentBackBuffer(),
 		D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT));
-#endif // EX6
+#endif
+
+	mCommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(CurrentBackBuffer(),
+		D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT));
 
     // Done recording commands.
     ThrowIfFailed(mCommandList->Close());
@@ -605,16 +632,7 @@ void WavesCSApp::BuildRootSignature()
 	CD3DX12_DESCRIPTOR_RANGE displacementMapTable;
 	displacementMapTable.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 1);
 
-#if defined(EX6)
-	CD3DX12_DESCRIPTOR_RANGE sobelOpMapTable;
-	sobelOpMapTable.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 2);
-
-	// Root parameter can be a table, root descriptor or root constants.
-	CD3DX12_ROOT_PARAMETER slotRootParameter[6];
-#else
-	// Root parameter can be a table, root descriptor or root constants.
 	CD3DX12_ROOT_PARAMETER slotRootParameter[5];
-#endif
 
 	// Perfomance TIP: Order from most frequent to least frequent.
 	slotRootParameter[0].InitAsDescriptorTable(1, &texTable, D3D12_SHADER_VISIBILITY_ALL);
@@ -622,18 +640,12 @@ void WavesCSApp::BuildRootSignature()
     slotRootParameter[2].InitAsConstantBufferView(1);
     slotRootParameter[3].InitAsConstantBufferView(2);
 	slotRootParameter[4].InitAsDescriptorTable(1, &displacementMapTable, D3D12_SHADER_VISIBILITY_ALL);
-#if defined(EX6)
-	slotRootParameter[5].InitAsDescriptorTable(1, &sobelOpMapTable, D3D12_SHADER_VISIBILITY_ALL);
-#endif
 
 	auto staticSamplers = GetStaticSamplers();
 
     // A root signature is an array of root parameters.
-#if defined(EX6)
-	CD3DX12_ROOT_SIGNATURE_DESC rootSigDesc(6, slotRootParameter, (UINT)staticSamplers.size(), staticSamplers.data(), D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
-#else
+
 	CD3DX12_ROOT_SIGNATURE_DESC rootSigDesc(5, slotRootParameter, (UINT)staticSamplers.size(), staticSamplers.data(), D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
-#endif
 
     // create a root signature with a single slot which points to a descriptor range consisting of a single constant buffer
     ComPtr<ID3DBlob> serializedRootSig = nullptr;
@@ -736,14 +748,86 @@ void WavesCSApp::BuildPostProcessRootSignature()
 		IID_PPV_ARGS(mPostProcessRootSignature.GetAddressOf())));
 }
 
+void WavesCSApp::BuildCompositeRootSignature()
+{
+	CD3DX12_DESCRIPTOR_RANGE baseMap;
+	baseMap.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0);
+
+	CD3DX12_DESCRIPTOR_RANGE edgeMap;
+	edgeMap.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 1);
+
+	// Root parameter can be a table, root descriptor or root constants.
+	CD3DX12_ROOT_PARAMETER slotRootParameter[2];
+
+	slotRootParameter[0].InitAsDescriptorTable(1, &baseMap, D3D12_SHADER_VISIBILITY_ALL);
+	slotRootParameter[1].InitAsDescriptorTable(1, &edgeMap, D3D12_SHADER_VISIBILITY_ALL);
+
+	auto staticSamplers = GetStaticSamplers();
+
+	// A root signature is an array of root parameters.
+
+	CD3DX12_ROOT_SIGNATURE_DESC rootSigDesc(2, slotRootParameter, (UINT)staticSamplers.size(), staticSamplers.data(), D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
+
+	// create a root signature with a single slot which points to a descriptor range consisting of a single constant buffer
+	ComPtr<ID3DBlob> serializedRootSig = nullptr;
+	ComPtr<ID3DBlob> errorBlob = nullptr;
+	HRESULT hr = D3D12SerializeRootSignature(&rootSigDesc, D3D_ROOT_SIGNATURE_VERSION_1,
+		serializedRootSig.GetAddressOf(), errorBlob.GetAddressOf());
+
+	if (errorBlob != nullptr)
+	{
+		::OutputDebugStringA((char*)errorBlob->GetBufferPointer());
+	}
+	ThrowIfFailed(hr);
+
+	ThrowIfFailed(md3dDevice->CreateRootSignature(
+		0,
+		serializedRootSig->GetBufferPointer(),
+		serializedRootSig->GetBufferSize(),
+		IID_PPV_ARGS(mCompositeRootSignature.GetAddressOf())));
+}
+
+void WavesCSApp::BuildOffScreenRenderTarget()
+{
+	D3D12_RESOURCE_DESC texDesc = {};
+	texDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+	texDesc.Width = mClientWidth;
+	texDesc.Height = mClientHeight;
+	texDesc.DepthOrArraySize = 1;
+	texDesc.MipLevels = 1;
+	texDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+	texDesc.SampleDesc.Count = 1;
+	texDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
+
+	ThrowIfFailed(md3dDevice->CreateCommittedResource(
+		&CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT),
+		D3D12_HEAP_FLAG_NONE,
+		&texDesc,
+		D3D12_RESOURCE_STATE_RENDER_TARGET,
+		nullptr,
+		IID_PPV_ARGS(&mOffScreenRenderTarget)
+	));
+}
+
+void WavesCSApp::BuildOffScreenDescriptorHeaps()
+{
+	D3D12_DESCRIPTOR_HEAP_DESC rtvHeapDesc;
+	rtvHeapDesc.NumDescriptors = 1;
+	rtvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
+	rtvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
+	rtvHeapDesc.NodeMask = 0;
+	ThrowIfFailed(md3dDevice->CreateDescriptorHeap(&rtvHeapDesc, IID_PPV_ARGS(&mOffScreenRtvDescriptorHeap)));
+
+	CD3DX12_CPU_DESCRIPTOR_HANDLE hDescriptor(mOffScreenRtvDescriptorHeap->GetCPUDescriptorHandleForHeapStart());
+	md3dDevice->CreateRenderTargetView(mOffScreenRenderTarget.Get(), nullptr, hDescriptor);
+	mOffScreenRtvHandle = hDescriptor;
+}
+
 void WavesCSApp::BuildDescriptorHeaps()
 {
 	UINT srvCount = 3;
-
-	//
-	// Create the SRV heap.
-	//
 	D3D12_DESCRIPTOR_HEAP_DESC srvHeapDesc = {};
+
 #ifdef EX6
 	srvHeapDesc.NumDescriptors = srvCount + mWaves->DescriptorCount() + mSobelOp->DescriptorCount();
 #else
@@ -827,6 +911,8 @@ void WavesCSApp::BuildShadersAndInputLayout()
 	mShaders["wavesDisturbCS"] = d3dUtil::CompileShader(L"Shaders\\WaveSim.hlsl", nullptr, "DisturbWavesCS", "cs_5_0");
 #ifdef EX6
 	mShaders["sobelOpCS"] = d3dUtil::CompileShader(L"Shaders\\SobelOpCS.hlsl", nullptr, "SobelCS", "cs_5_0");
+	mShaders["sobelCompositeVS"] = d3dUtil::CompileShader(L"Shaders\\Composite.hlsl", nullptr, "VS", "vs_5_0");
+	mShaders["sobelCompositePS"] = d3dUtil::CompileShader(L"Shaders\\Composite.hlsl", nullptr , "PS", "ps_5_0");
 #endif // EX6
 
     mInputLayout =
@@ -1095,7 +1181,24 @@ void WavesCSApp::BuildPSOs()
 
 #ifdef EX6
 	//
-	// PSO for calculating Sobel operation
+	// PSO for composite shader
+	//
+	D3D12_GRAPHICS_PIPELINE_STATE_DESC sobelCompositePSO = opaquePsoDesc;
+	sobelCompositePSO.pRootSignature = mCompositeRootSignature.Get();
+	sobelCompositePSO.VS =
+	{
+		reinterpret_cast<BYTE*>(mShaders["sobelCompositeVS"]->GetBufferPointer()),
+		mShaders["sobelCompositeVS"]->GetBufferSize()
+	};
+	sobelCompositePSO.PS =
+	{
+		reinterpret_cast<BYTE*>(mShaders["sobelCompositePS"]->GetBufferPointer()),
+		mShaders["sobelCompositePS"]->GetBufferSize()
+	};
+	ThrowIfFailed(md3dDevice->CreateGraphicsPipelineState(&sobelCompositePSO, IID_PPV_ARGS(&mPSOs["sobelCompositePSO"])));
+
+	//
+	// PSO for calculating sobel operation
 	//
 	D3D12_COMPUTE_PIPELINE_STATE_DESC sobelOpPSO = {};
 	sobelOpPSO.pRootSignature = mPostProcessRootSignature.Get();
@@ -1105,7 +1208,7 @@ void WavesCSApp::BuildPSOs()
 		mShaders["sobelOpCS"]->GetBufferSize()
 	};
 	sobelOpPSO.Flags = D3D12_PIPELINE_STATE_FLAG_NONE;
-	ThrowIfFailed(md3dDevice->CreateComputePipelineState(&sobelOpPSO, IID_PPV_ARGS(&mPSOs["sobelOp"])));
+	ThrowIfFailed(md3dDevice->CreateComputePipelineState(&sobelOpPSO, IID_PPV_ARGS(&mPSOs["sobelOpCS"])));
 #endif
 }
 

@@ -17,16 +17,11 @@
     #define NUM_SPOT_LIGHTS 0
 #endif
 
-#define EX6
-
 // Include structures and functions for lighting.
 #include "LightingUtil.hlsl"
 
 Texture2D gDiffuseMap : register(t0);
 Texture2D gDisplacementMap : register(t1);
-#if defined(EX6)
-Texture2D<float4> gSobelOpMap : register(t2);
-#endif
 
 SamplerState gsamPointWrap        : register(s0);
 SamplerState gsamPointClamp       : register(s1);
@@ -171,10 +166,10 @@ float4 PS(VertexOut pin) : SV_Target
 	float fogAmount = saturate((distToEye - gFogStart) / gFogRange);
 	litColor = lerp(litColor, gFogColor, fogAmount);
 #endif
-
+    
     // Common convention to take alpha from diffuse albedo.
     litColor.a = diffuseAlbedo.a;
-
+    
     return litColor;
 }
 
