@@ -61,6 +61,9 @@ void SobelOperation::OnResize(UINT newWidth, UINT newHeight)
 
 void SobelOperation::Execute(ID3D12GraphicsCommandList* cmdList, ID3D12RootSignature* rootSig, ID3D12PipelineState* sobelOpPSO, ID3D12Resource* input)
 {
+	cmdList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(mOutput.Get(),
+		D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS));
+
 	cmdList->SetComputeRootSignature(rootSig);
 
 	cmdList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(input,
@@ -88,6 +91,9 @@ void SobelOperation::Execute(ID3D12GraphicsCommandList* cmdList, ID3D12RootSigna
 	UINT numGroupsX = (UINT)ceilf(mWidth / 32.f);
 	UINT numGroupsY = (UINT)ceilf(mHeight / 32.f);
 	cmdList->Dispatch(numGroupsX, numGroupsY, 1);
+
+	cmdList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(mInput.Get(),
+		 D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_STATE_COMMON ));
 
 	cmdList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(mOutput.Get(),
 		D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE));

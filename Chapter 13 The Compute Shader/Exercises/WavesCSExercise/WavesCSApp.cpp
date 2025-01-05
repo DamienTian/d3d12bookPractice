@@ -102,7 +102,7 @@ private:
 	void BuildPostProcessRootSignature(); // EX6: Sobel CS root signature
 	void BuildCompositeRootSignature();	// EX6: for combine base result & sobel op result
 	void BuildOffScreenRenderTarget(); // EX6: build off screen render target
-	void BuildOffScreenDescriptorHeaps(); // EX6: build off screen 
+	void BuildOffScreenRtvDescriptorHeaps(); // EX6: build off screen 
 	void BuildDescriptorHeaps();
     void BuildShadersAndInputLayout();
     void BuildLandGeometry();
@@ -234,7 +234,7 @@ bool WavesCSApp::Initialize()
 	BuildOffScreenRenderTarget();
 	BuildPostProcessRootSignature();
 	BuildCompositeRootSignature();
-	BuildOffScreenDescriptorHeaps();
+	BuildOffScreenRtvDescriptorHeaps();
 #endif // EX6
 	BuildDescriptorHeaps();
     BuildShadersAndInputLayout();
@@ -826,7 +826,7 @@ void WavesCSApp::BuildOffScreenRenderTarget()
 	));
 }
 
-void WavesCSApp::BuildOffScreenDescriptorHeaps()
+void WavesCSApp::BuildOffScreenRtvDescriptorHeaps()
 {
 	// Create RTV heap and handles
 	D3D12_DESCRIPTOR_HEAP_DESC rtvHeapDesc;
@@ -839,39 +839,17 @@ void WavesCSApp::BuildOffScreenDescriptorHeaps()
 	CD3DX12_CPU_DESCRIPTOR_HANDLE hRtvCpuDescriptor(mOffScreenRtvDescriptorHeap->GetCPUDescriptorHandleForHeapStart());
 	md3dDevice->CreateRenderTargetView(mOffScreenRenderTarget.Get(), nullptr, hRtvCpuDescriptor);
 	mOffScreenRtvCpuHandle = hRtvCpuDescriptor;
-
-	// Create SRV heap and handles
-	D3D12_DESCRIPTOR_HEAP_DESC srvHeapDesc = {};
-	srvHeapDesc.NumDescriptors = 1; 
-	srvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
-	srvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
-	srvHeapDesc.NodeMask = 0;
-	ThrowIfFailed(md3dDevice->CreateDescriptorHeap(&srvHeapDesc, IID_PPV_ARGS(&mOffScreenSrvDescriptorHeap)));
-
-	CD3DX12_CPU_DESCRIPTOR_HANDLE hSrvCpuDescriptor(mOffScreenSrvDescriptorHeap->GetCPUDescriptorHandleForHeapStart());
-
-	D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
-	srvDesc.Format = mOffScreenRenderTarget->GetDesc().Format; 
-	srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;     
-	srvDesc.Texture2D.MostDetailedMip = 0;
-	srvDesc.Texture2D.MipLevels = 1;
-	srvDesc.Texture2D.ResourceMinLODClamp = 0.0f;
-	srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-
-	md3dDevice->CreateShaderResourceView(mOffScreenRenderTarget.Get(), &srvDesc, hSrvCpuDescriptor);
-
-	CD3DX12_GPU_DESCRIPTOR_HANDLE hSrvGpuDescriptor(mOffScreenSrvDescriptorHeap->GetGPUDescriptorHandleForHeapStart());
-	mOffScreenSrvGpuHandle = hSrvGpuDescriptor;
 }
 
 void WavesCSApp::BuildDescriptorHeaps()
 {
-	UINT srvCount = 3;
-	D3D12_DESCRIPTOR_HEAP_DESC srvHeapDesc = {};
-
 #ifdef EX6
+	UINT srvCount = 4; // EX6: one more for off screen srv
+	D3D12_DESCRIPTOR_HEAP_DESC srvHeapDesc = {};
 	srvHeapDesc.NumDescriptors = srvCount + mWaves->DescriptorCount() + mSobelOp->DescriptorCount();
 #else
+	UINT srvCount = 3;
+	D3D12_DESCRIPTOR_HEAP_DESC srvHeapDesc = {};
 	srvHeapDesc.NumDescriptors = srvCount + mWaves->DescriptorCount();
 #endif // EX6
 
@@ -907,6 +885,20 @@ void WavesCSApp::BuildDescriptorHeaps()
 
 	srvDesc.Format = fenceTex->GetDesc().Format;
 	md3dDevice->CreateShaderResourceView(fenceTex.Get(), &srvDesc, hDescriptor);
+
+#ifdef EX6
+	// next descriptor for off screen srv
+	hDescriptor.Offset(1, mCbvSrvDescriptorSize);
+
+	srvDesc.Format = mOffScreenRenderTarget->GetDesc().Format;
+	md3dDevice->CreateShaderResourceView(mOffScreenRenderTarget.Get(), &srvDesc, hDescriptor);
+	mOffScreenSrvCpuHandle = hDescriptor;
+
+	// Hardcode this, could be resolve by different arrangement
+	CD3DX12_GPU_DESCRIPTOR_HANDLE hGpuDescriptor(mSrvDescriptorHeap->GetGPUDescriptorHandleForHeapStart());
+	hGpuDescriptor.Offset(3, mCbvSrvDescriptorSize); // why three? because this is the fourth element in the heap
+	mOffScreenSrvGpuHandle = hGpuDescriptor;
+#endif // EX6
 
 	mWaves->BuildDescriptors(
 		CD3DX12_CPU_DESCRIPTOR_HANDLE(mSrvDescriptorHeap->GetCPUDescriptorHandleForHeapStart(), srvCount, mCbvSrvDescriptorSize),
