@@ -18,7 +18,13 @@ SobelOperation::SobelOperation(ID3D12Device* device, UINT width, UINT height, DX
 
 UINT SobelOperation::DescriptorCount() const
 {
-	return 2;
+	return 3;
+}
+
+CD3DX12_GPU_DESCRIPTOR_HANDLE SobelOperation::SobelResult() const
+{
+	return mOutputGpuSrv;
+	//return mOutputGpuUav;
 }
 
 ID3D12Resource* SobelOperation::Output()
@@ -29,9 +35,11 @@ ID3D12Resource* SobelOperation::Output()
 void SobelOperation::BuildDescriptors(CD3DX12_CPU_DESCRIPTOR_HANDLE hCpuDescriptor, CD3DX12_GPU_DESCRIPTOR_HANDLE hGpuDescriptor, UINT descriptorSize)
 {
 	mInputCpuSrv = hCpuDescriptor;
+	mOutputCpuSrv = hCpuDescriptor.Offset(1, descriptorSize);
 	mOutputCpuUav = hCpuDescriptor.Offset(1, descriptorSize);
 
 	mInputGpuSrv = hGpuDescriptor;
+	mOutputGpuSrv = hGpuDescriptor.Offset(1, descriptorSize);
 	mOutputGpuUav = hGpuDescriptor.Offset(1, descriptorSize);
 
 	BuildDescriptors();
@@ -80,6 +88,9 @@ void SobelOperation::Execute(ID3D12GraphicsCommandList* cmdList, ID3D12RootSigna
 	UINT numGroupsX = (UINT)ceilf(mWidth / 32.f);
 	UINT numGroupsY = (UINT)ceilf(mHeight / 32.f);
 	cmdList->Dispatch(numGroupsX, numGroupsY, 1);
+
+	cmdList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(mOutput.Get(),
+		D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE));
 }
 
 void SobelOperation::BuildDescriptors()
@@ -98,6 +109,7 @@ void SobelOperation::BuildDescriptors()
 	uavDesc.Texture2D.MipSlice = 0;
 
 	md3dDevice->CreateShaderResourceView(mInput.Get(), &srvDesc, mInputCpuSrv);
+	md3dDevice->CreateShaderResourceView(mOutput.Get(), &srvDesc, mOutputCpuSrv);
 	md3dDevice->CreateUnorderedAccessView(mOutput.Get(), nullptr, &uavDesc, mOutputCpuUav);
 }
 

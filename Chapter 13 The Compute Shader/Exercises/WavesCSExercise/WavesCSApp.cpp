@@ -133,10 +133,13 @@ private:
 	ComPtr<ID3D12RootSignature> mCompositeRootSignature = nullptr; // EX6
 
 	Microsoft::WRL::ComPtr<ID3D12Resource> mOffScreenRenderTarget; // EX6
-	CD3DX12_CPU_DESCRIPTOR_HANDLE mOffScreenRtvHandle; // EX6
+	CD3DX12_CPU_DESCRIPTOR_HANDLE mOffScreenRtvCpuHandle; // EX6
+	CD3DX12_CPU_DESCRIPTOR_HANDLE mOffScreenSrvCpuHandle; // EX6
+	CD3DX12_GPU_DESCRIPTOR_HANDLE mOffScreenSrvGpuHandle; // EX6
 
 	ComPtr<ID3D12DescriptorHeap> mSrvDescriptorHeap = nullptr;
 	ComPtr<ID3D12DescriptorHeap> mOffScreenRtvDescriptorHeap = nullptr; // EX6
+	ComPtr<ID3D12DescriptorHeap> mOffScreenSrvDescriptorHeap = nullptr; // EX6 for using render result as shader resource
 
 	std::unordered_map<std::string, std::unique_ptr<MeshGeometry>> mGeometries;
 	std::unordered_map<std::string, std::unique_ptr<Material>> mMaterials;
@@ -316,22 +319,25 @@ void WavesCSApp::Draw(const GameTimer& gt)
 
 	mCommandList->SetPipelineState(mPSOs["opaque"].Get());
 
-    // Indicate a state transition on the resource usage.
+    // Set render target
+#ifdef EX6
+	mCommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(mOffScreenRenderTarget.Get(),
+		D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET));
+
+	mCommandList->ClearRenderTargetView(mOffScreenRtvCpuHandle, (float*)&mMainPassCB.FogColor, 0, nullptr);
+	// Render the base map on a off screen texture, so can be used later
+	mCommandList->OMSetRenderTargets(1, &mOffScreenRtvCpuHandle, false, &DepthStencilView());
+#else
+	// Indicate a state transition on the resource usage.
 	mCommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(CurrentBackBuffer(),
 		D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET));
 
-    // Clear the back buffer and depth buffer.
-    mCommandList->ClearRenderTargetView(CurrentBackBufferView(), (float*)&mMainPassCB.FogColor, 0, nullptr);
-    mCommandList->ClearRenderTargetView(mOffScreenRtvHandle, (float*)&mMainPassCB.FogColor, 0, nullptr);
-    mCommandList->ClearDepthStencilView(DepthStencilView(), D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0, 0, nullptr);
-
-#ifdef EX6
-	// Render the base map on a off screen texture, so can be used later
-	mCommandList->OMSetRenderTargets(1, &mOffScreenRtvHandle, false, &DepthStencilView());
-#else
+	mCommandList->ClearRenderTargetView(CurrentBackBufferView(), (float*)&mMainPassCB.FogColor, 0, nullptr);
 	// Specify the buffers we are going to render to.
 	mCommandList->OMSetRenderTargets(1, &CurrentBackBufferView(), true, &DepthStencilView());
 #endif // EX6
+
+	mCommandList->ClearDepthStencilView(DepthStencilView(), D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0, 0, nullptr);
 
 	mCommandList->SetGraphicsRootSignature(mRootSignature.Get());
 
@@ -356,21 +362,32 @@ void WavesCSApp::Draw(const GameTimer& gt)
 #ifdef EX6
 	mCommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(mOffScreenRenderTarget.Get(),
 		D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE));
+
+	// Execute Sobel Op
 	mSobelOp->Execute(mCommandList.Get(), mPostProcessRootSignature.Get(), mPSOs["sobelOpCS"].Get(), mOffScreenRenderTarget.Get());
 
-	// TODO: composite base & sobel op render result together 
-
-	// Output Sobel op output directly, but cannot combine base render result from here
+	// Result 1: Composite base & sobel op render results together 
 	//	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-	
-	mCommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(CurrentBackBuffer(),
+	mCommandList->OMSetRenderTargets(1, &CurrentBackBufferView(), true, &DepthStencilView());
+
+	mCommandList->SetPipelineState(mPSOs["sobelCompositePSO"].Get());
+	mCommandList->SetGraphicsRootSignature(mCompositeRootSignature.Get());
+
+	mCommandList->SetGraphicsRootDescriptorTable(0, mSobelOp->SobelResult());
+	mCommandList->SetGraphicsRootDescriptorTable(1, mOffScreenSrvGpuHandle);
+
+	mCommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+	mCommandList->DrawInstanced(6, 1, 0, 0);
+	//	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-	
+
+	// Result 2: Output Sobel op output directly, but cannot combine base render result from here
+	//	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-	
+	/*mCommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(CurrentBackBuffer(),
 		D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_COPY_DEST));
 	mCommandList->CopyResource(CurrentBackBuffer(), mSobelOp->Output());
 	mCommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(CurrentBackBuffer(),
-		D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_PRESENT));
+		D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_PRESENT));*/
 	//	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-	
-
-	mCommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(mOffScreenRenderTarget.Get(),
-		D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET));
 #else
 	// Indicate a state transition on the resource usage.
 	mCommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(CurrentBackBuffer(),
@@ -803,7 +820,7 @@ void WavesCSApp::BuildOffScreenRenderTarget()
 		&CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT),
 		D3D12_HEAP_FLAG_NONE,
 		&texDesc,
-		D3D12_RESOURCE_STATE_RENDER_TARGET,
+		D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
 		nullptr,
 		IID_PPV_ARGS(&mOffScreenRenderTarget)
 	));
@@ -811,6 +828,7 @@ void WavesCSApp::BuildOffScreenRenderTarget()
 
 void WavesCSApp::BuildOffScreenDescriptorHeaps()
 {
+	// Create RTV heap and handles
 	D3D12_DESCRIPTOR_HEAP_DESC rtvHeapDesc;
 	rtvHeapDesc.NumDescriptors = 1;
 	rtvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
@@ -818,9 +836,32 @@ void WavesCSApp::BuildOffScreenDescriptorHeaps()
 	rtvHeapDesc.NodeMask = 0;
 	ThrowIfFailed(md3dDevice->CreateDescriptorHeap(&rtvHeapDesc, IID_PPV_ARGS(&mOffScreenRtvDescriptorHeap)));
 
-	CD3DX12_CPU_DESCRIPTOR_HANDLE hDescriptor(mOffScreenRtvDescriptorHeap->GetCPUDescriptorHandleForHeapStart());
-	md3dDevice->CreateRenderTargetView(mOffScreenRenderTarget.Get(), nullptr, hDescriptor);
-	mOffScreenRtvHandle = hDescriptor;
+	CD3DX12_CPU_DESCRIPTOR_HANDLE hRtvCpuDescriptor(mOffScreenRtvDescriptorHeap->GetCPUDescriptorHandleForHeapStart());
+	md3dDevice->CreateRenderTargetView(mOffScreenRenderTarget.Get(), nullptr, hRtvCpuDescriptor);
+	mOffScreenRtvCpuHandle = hRtvCpuDescriptor;
+
+	// Create SRV heap and handles
+	D3D12_DESCRIPTOR_HEAP_DESC srvHeapDesc = {};
+	srvHeapDesc.NumDescriptors = 1; 
+	srvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+	srvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+	srvHeapDesc.NodeMask = 0;
+	ThrowIfFailed(md3dDevice->CreateDescriptorHeap(&srvHeapDesc, IID_PPV_ARGS(&mOffScreenSrvDescriptorHeap)));
+
+	CD3DX12_CPU_DESCRIPTOR_HANDLE hSrvCpuDescriptor(mOffScreenSrvDescriptorHeap->GetCPUDescriptorHandleForHeapStart());
+
+	D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+	srvDesc.Format = mOffScreenRenderTarget->GetDesc().Format; 
+	srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;     
+	srvDesc.Texture2D.MostDetailedMip = 0;
+	srvDesc.Texture2D.MipLevels = 1;
+	srvDesc.Texture2D.ResourceMinLODClamp = 0.0f;
+	srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+
+	md3dDevice->CreateShaderResourceView(mOffScreenRenderTarget.Get(), &srvDesc, hSrvCpuDescriptor);
+
+	CD3DX12_GPU_DESCRIPTOR_HANDLE hSrvGpuDescriptor(mOffScreenSrvDescriptorHeap->GetGPUDescriptorHandleForHeapStart());
+	mOffScreenSrvGpuHandle = hSrvGpuDescriptor;
 }
 
 void WavesCSApp::BuildDescriptorHeaps()

@@ -27,6 +27,8 @@ public:
 
 	UINT DescriptorCount() const;
 
+	CD3DX12_GPU_DESCRIPTOR_HANDLE SobelResult ()const;
+
 	ID3D12Resource* Output();
 
 	void BuildDescriptors(CD3DX12_CPU_DESCRIPTOR_HANDLE hCpuDescriptor,CD3DX12_GPU_DESCRIPTOR_HANDLE hGpuDescriptor, UINT descriptorSize);
@@ -51,8 +53,10 @@ private:
 
 	CD3DX12_CPU_DESCRIPTOR_HANDLE mInputCpuSrv;
 	CD3DX12_GPU_DESCRIPTOR_HANDLE mInputGpuSrv;
-
+	
+	CD3DX12_CPU_DESCRIPTOR_HANDLE mOutputCpuSrv;
 	CD3DX12_CPU_DESCRIPTOR_HANDLE mOutputCpuUav;
+	CD3DX12_GPU_DESCRIPTOR_HANDLE mOutputGpuSrv;
 	CD3DX12_GPU_DESCRIPTOR_HANDLE mOutputGpuUav;
 
 	Microsoft::WRL::ComPtr<ID3D12Resource> mInput = nullptr;

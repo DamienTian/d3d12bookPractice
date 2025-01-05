@@ -4,8 +4,8 @@
 // Combines two images.
 //****************************************************************************
 
-Texture2D gBaseMap : register(t0);
-Texture2D gEdgeMap : register(t1);
+Texture2D gEdgeMap : register(t0);
+Texture2D gBaseMap : register(t1);
 
 SamplerState gsamPointWrap : register(s0);
 SamplerState gsamPointClamp : register(s1);
