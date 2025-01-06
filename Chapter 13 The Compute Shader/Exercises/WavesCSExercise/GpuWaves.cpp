@@ -270,8 +270,11 @@ void GpuWaves::Update(
 		t = 0.0f; // reset time
 
 		// The current solution needs to be able to be read by the vertex shader, so change its state to GENERIC_READ.
-		cmdList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(mCurrSol.Get(),
-			D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_GENERIC_READ));
+		if (mDisturbed) {
+			cmdList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(mCurrSol.Get(),
+				D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_GENERIC_READ));
+			mDisturbed = false;
+		}
 	}
 }
 
@@ -301,6 +304,8 @@ void GpuWaves::Disturb(
 	// One thread group kicks off one thread, which displaces the height of one
 	// vertex and its neighbors.
 	cmdList->Dispatch(1, 1, 1);
+
+	mDisturbed = true;
 }
 
 

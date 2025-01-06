@@ -322,7 +322,7 @@ void WavesCSApp::Draw(const GameTimer& gt)
     // Set render target
 #ifdef EX6
 	mCommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(mOffScreenRenderTarget.Get(),
-		D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET));
+		D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET));
 
 	mCommandList->ClearRenderTargetView(mOffScreenRtvCpuHandle, (float*)&mMainPassCB.FogColor, 0, nullptr);
 	// Render the base map on a off screen texture, so can be used later
@@ -360,14 +360,15 @@ void WavesCSApp::Draw(const GameTimer& gt)
 
 	
 #ifdef EX6
-	mCommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(mOffScreenRenderTarget.Get(),
-		D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE));
-
 	// Execute Sobel Op
 	mSobelOp->Execute(mCommandList.Get(), mPostProcessRootSignature.Get(), mPSOs["sobelOpCS"].Get(), mOffScreenRenderTarget.Get());
 
 	// Result 1: Composite base & sobel op render results together 
 	//	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-	
+	// Indicate a state transition on the resource usage.
+	mCommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(CurrentBackBuffer(),
+		D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET));
+
 	mCommandList->OMSetRenderTargets(1, &CurrentBackBufferView(), true, &DepthStencilView());
 
 	mCommandList->SetPipelineState(mPSOs["sobelCompositePSO"].Get());
@@ -388,10 +389,6 @@ void WavesCSApp::Draw(const GameTimer& gt)
 	mCommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(CurrentBackBuffer(),
 		D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_PRESENT));*/
 	//	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-	-	
-#else
-	// Indicate a state transition on the resource usage.
-	mCommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(CurrentBackBuffer(),
-		D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT));
 #endif
 
 	mCommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(CurrentBackBuffer(),
@@ -606,11 +603,11 @@ void WavesCSApp::UpdateWavesGPU(const GameTimer& gt)
 
 		float r = MathHelper::RandF(1.0f, 2.0f);
 
-		mWaves->Disturb(mCommandList.Get(), mWavesRootSignature.Get(), mPSOs["wavesDisturb"].Get(), i, j, r);
+		mWaves->Disturb(mCommandList.Get(), mWavesRootSignature.Get(), mPSOs["wavesDisturb"].Get(), i, j, r); // D3D12_RESOURCE_STATE_GENERIC_READ -> D3D12_RESOURCE_STATE_UNORDERED_ACCESS
 	}
 
 	// Update the wave simulation.
-	mWaves->Update(gt, mCommandList.Get(), mWavesRootSignature.Get(), mPSOs["wavesUpdate"].Get());
+	mWaves->Update(gt, mCommandList.Get(), mWavesRootSignature.Get(), mPSOs["wavesUpdate"].Get()); // D3D12_RESOURCE_STATE_UNORDERED_ACCESS -> D3D12_RESOURCE_STATE_GENERIC_READ
 }
 
 void WavesCSApp::LoadTextures()
@@ -816,12 +813,19 @@ void WavesCSApp::BuildOffScreenRenderTarget()
 	texDesc.SampleDesc.Count = 1;
 	texDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
 
+	D3D12_CLEAR_VALUE clearValue;
+	clearValue.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+	clearValue.Color[0] = 0.7f;
+	clearValue.Color[1] = 0.7f;
+	clearValue.Color[2] = 0.7f;
+	clearValue.Color[3] = 1.0f;
+
 	ThrowIfFailed(md3dDevice->CreateCommittedResource(
 		&CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT),
 		D3D12_HEAP_FLAG_NONE,
 		&texDesc,
-		D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
-		nullptr,
+		D3D12_RESOURCE_STATE_COPY_SOURCE,
+		&clearValue,
 		IID_PPV_ARGS(&mOffScreenRenderTarget)
 	));
 }
