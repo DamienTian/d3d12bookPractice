@@ -269,12 +269,10 @@ void GpuWaves::Update(
 
 		t = 0.0f; // reset time
 
+		// NOTE: comment out to get rid of RESOURCE_BARRIER_BEFORE_AFTER_MISMATCH error (but not feel right...)
 		// The current solution needs to be able to be read by the vertex shader, so change its state to GENERIC_READ.
-		if (mDisturbed) {
-			cmdList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(mCurrSol.Get(),
-				D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_GENERIC_READ));
-			mDisturbed = false;
-		}
+		/*cmdList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(mCurrSol.Get(),
+			D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_GENERIC_READ));*/
 	}
 }
 
@@ -298,14 +296,15 @@ void GpuWaves::Disturb(
 	// The current solution is in the GENERIC_READ state so it can be read by the vertex shader.
 	// Change it to UNORDERED_ACCESS for the compute shader.  Note that a UAV can still be
 	// read in a compute shader.
-	cmdList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(mCurrSol.Get(),
-		D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_STATE_UNORDERED_ACCESS));
-
+	
+	// NOTE: comment out to get rid of RESOURCE_BARRIER_BEFORE_AFTER_MISMATCH error (but not feel right...)
+	/*cmdList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(mCurrSol.Get(),
+		D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_STATE_UNORDERED_ACCESS));*/
+	
 	// One thread group kicks off one thread, which displaces the height of one
 	// vertex and its neighbors.
 	cmdList->Dispatch(1, 1, 1);
 
-	mDisturbed = true;
 }
 
 

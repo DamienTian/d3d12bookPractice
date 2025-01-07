@@ -7,3 +7,7 @@ Chapter 6 Drawing in Direct3D/Box/x64/Debug/Box.vcxproj.FileListAbsolute.txt
 *.iobj
 *.ipdb
 *.wsuo
+Chapter 13 The Compute Shader/Exercises/VecAddExercise/results_ex1.txt
+*.json
+*.enc
+*.sln
