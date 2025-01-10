@@ -120,6 +120,8 @@ private:
     XMFLOAT3 GetHillsNormal(float x, float z)const;
 
 private:
+	// This resize the off screen render target
+	void _OnResizeEX6();
 
     std::vector<std::unique_ptr<FrameResource>> mFrameResources;
     FrameResource* mCurrFrameResource = nullptr;
@@ -139,7 +141,6 @@ private:
 
 	ComPtr<ID3D12DescriptorHeap> mSrvDescriptorHeap = nullptr;
 	ComPtr<ID3D12DescriptorHeap> mOffScreenRtvDescriptorHeap = nullptr; // EX6
-	ComPtr<ID3D12DescriptorHeap> mOffScreenSrvDescriptorHeap = nullptr; // EX6 for using render result as shader resource
 
 	std::unordered_map<std::string, std::unique_ptr<MeshGeometry>> mGeometries;
 	std::unordered_map<std::string, std::unique_ptr<Material>> mMaterials;
@@ -259,16 +260,14 @@ bool WavesCSApp::Initialize()
  
 void WavesCSApp::OnResize()
 {
-    D3DApp::OnResize();
-
-    // The window resized, so update the aspect ratio and recompute the projection matrix.
-    XMMATRIX P = XMMatrixPerspectiveFovLH(0.25f*MathHelper::Pi, AspectRatio(), 1.0f, 1000.0f);
-    XMStoreFloat4x4(&mProj, P);
-
 #ifdef EX6
-	if (mSobelOp) {
-		mSobelOp->OnResize(mClientWidth, mClientHeight);
-	}
+	_OnResizeEX6();
+#else
+	D3DApp::OnResize();
+
+	// The window resized, so update the aspect ratio and recompute the projection matrix.
+	XMMATRIX P = XMMatrixPerspectiveFovLH(0.25f * MathHelper::Pi, AspectRatio(), 1.0f, 1000.0f);
+	XMStoreFloat4x4(&mProj, P);
 #endif // EX6
 }
 
@@ -326,7 +325,7 @@ void WavesCSApp::Draw(const GameTimer& gt)
 
 	mCommandList->ClearRenderTargetView(mOffScreenRtvCpuHandle, (float*)&mMainPassCB.FogColor, 0, nullptr);
 	// Render the base map on a off screen texture, so can be used later
-	mCommandList->OMSetRenderTargets(1, &mOffScreenRtvCpuHandle, false, &DepthStencilView());
+	mCommandList->OMSetRenderTargets(1, &mOffScreenRtvCpuHandle, true, &DepthStencilView());
 #else
 	// Indicate a state transition on the resource usage.
 	mCommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(CurrentBackBuffer(),
@@ -804,6 +803,7 @@ void WavesCSApp::BuildCompositeRootSignature()
 void WavesCSApp::BuildOffScreenRenderTarget()
 {
 	D3D12_RESOURCE_DESC texDesc = {};
+	ZeroMemory(&texDesc, sizeof(D3D12_RESOURCE_DESC));
 	texDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
 	texDesc.Width = mClientWidth;
 	texDesc.Height = mClientHeight;
@@ -1444,4 +1444,228 @@ XMFLOAT3 WavesCSApp::GetHillsNormal(float x, float z)const
     XMStoreFloat3(&n, unitNormal);
 
     return n;
+}
+
+void WavesCSApp::_OnResizeEX6()
+{
+	// Copied from D3DApp::OnResize() 
+	// -*-*--*-*--*-*--*-*--*-*--*-*--*-*--*-*--*-*--*-*--*-*--*-*--*-*--*-*--*-*-
+	assert(md3dDevice);
+	assert(mSwapChain);
+	assert(mDirectCmdListAlloc);
+
+	// Flush before changing any resources.
+	FlushCommandQueue();
+
+	ThrowIfFailed(mCommandList->Reset(mDirectCmdListAlloc.Get(), nullptr));
+
+	// Release the previous resources we will be recreating.
+	for (int i = 0; i < SwapChainBufferCount; ++i)
+		mSwapChainBuffer[i].Reset();
+	mDepthStencilBuffer.Reset();
+
+	// Resize the swap chain.
+	ThrowIfFailed(mSwapChain->ResizeBuffers(
+		SwapChainBufferCount,
+		mClientWidth, mClientHeight,
+		mBackBufferFormat,
+		DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH));
+
+	mCurrBackBuffer = 0;
+
+	CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHeapHandle(mRtvHeap->GetCPUDescriptorHandleForHeapStart());
+	for (UINT i = 0; i < SwapChainBufferCount; i++)
+	{
+		// Get the ith buffer in the swap chain.
+		ThrowIfFailed(mSwapChain->GetBuffer(i, IID_PPV_ARGS(&mSwapChainBuffer[i])));
+		// Create an RTV to it.
+		md3dDevice->CreateRenderTargetView(mSwapChainBuffer[i].Get(), nullptr, rtvHeapHandle);
+		// Next entry in heap.
+		rtvHeapHandle.Offset(1, mRtvDescriptorSize);
+	}
+
+	// = =  = =  = =  = =  = =  = =  = =  = =  = =  = =  = = 
+	// The following code example shows how we create the depth / stencil texture 
+	// and its corresponding depth / stencil view
+
+	// Create the depth/stencil buffer and view.
+	D3D12_RESOURCE_DESC depthStencilDesc;
+	depthStencilDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+	depthStencilDesc.Alignment = 0;
+	depthStencilDesc.Width = mClientWidth;
+	depthStencilDesc.Height = mClientHeight;
+	depthStencilDesc.DepthOrArraySize = 1;
+	depthStencilDesc.MipLevels = 1;
+
+	// Correction 11/12/2016: SSAO chapter requires an SRV to the depth buffer to read from 
+	// the depth buffer.  Therefore, because we need to create two views to the same resource:
+	//   1. SRV format: DXGI_FORMAT_R24_UNORM_X8_TYPELESS
+	//   2. DSV Format: DXGI_FORMAT_D24_UNORM_S8_UINT
+	// we need to create the depth buffer resource with a typeless format.  
+	depthStencilDesc.Format = DXGI_FORMAT_R24G8_TYPELESS;
+
+	depthStencilDesc.SampleDesc.Count = m4xMsaaState ? 4 : 1;
+	depthStencilDesc.SampleDesc.Quality = m4xMsaaState ? (m4xMsaaQuality - 1) : 0;
+	depthStencilDesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
+	depthStencilDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
+
+	D3D12_CLEAR_VALUE optClear;
+	optClear.Format = mDepthStencilFormat;
+	optClear.DepthStencil.Depth = 1.0f;
+	optClear.DepthStencil.Stencil = 0;
+	ThrowIfFailed(md3dDevice->CreateCommittedResource(
+		&CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT),
+		D3D12_HEAP_FLAG_NONE,
+		&depthStencilDesc,
+		D3D12_RESOURCE_STATE_COMMON,
+		&optClear,
+		IID_PPV_ARGS(mDepthStencilBuffer.GetAddressOf())));
+
+	// Create descriptor to mip level 0 of entire resource using the format of the resource.
+	D3D12_DEPTH_STENCIL_VIEW_DESC dsvDesc;
+	dsvDesc.Flags = D3D12_DSV_FLAG_NONE;
+	dsvDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
+	dsvDesc.Format = mDepthStencilFormat;
+	dsvDesc.Texture2D.MipSlice = 0;
+	md3dDevice->CreateDepthStencilView(mDepthStencilBuffer.Get(), &dsvDesc, DepthStencilView());
+
+	// Transition the resource from its initial state to be used as a depth buffer.
+	mCommandList->ResourceBarrier(1,
+		&CD3DX12_RESOURCE_BARRIER::Transition(
+			mDepthStencilBuffer.Get(),
+			D3D12_RESOURCE_STATE_COMMON,
+			D3D12_RESOURCE_STATE_DEPTH_WRITE)
+	);
+	// = =  = =  = =  = =  = =  = =  = =  = =  = =  = =  = = 
+	// -*-*--*-*--*-*--*-*--*-*--*-*--*-*--*-*--*-*--*-*--*-*--*-*--*-*--*-*--*-*-
+
+	// Do off screen render target resize
+	//	Many contents here are copied from building off screen render target and descriptor
+	//  heap functions with a little different order. 
+	// -*-*--*-*--*-*--*-*--*-*--*-*--*-*--*-*--*-*--*-*--*-*--*-*--*-*--*-*--*-*-
+	if (mOffScreenRenderTarget)
+	{
+		mOffScreenRenderTarget.Reset();
+	}
+
+	D3D12_RESOURCE_DESC texDesc;
+	ZeroMemory(&texDesc, sizeof(D3D12_RESOURCE_DESC));
+	texDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+	texDesc.Width = mClientWidth;
+	texDesc.Height = mClientHeight;
+	texDesc.DepthOrArraySize = 1;
+	texDesc.MipLevels = 1;
+	texDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+	texDesc.SampleDesc.Count = 1;
+	texDesc.SampleDesc.Quality = 0;
+	texDesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
+	texDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
+
+	D3D12_CLEAR_VALUE clearValue;
+	clearValue.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+	clearValue.Color[0] = 0.7f;
+	clearValue.Color[1] = 0.7f;
+	clearValue.Color[2] = 0.7f;
+	clearValue.Color[3] = 1.0f;
+	 
+	// create the commit resource of render target again
+	ThrowIfFailed(md3dDevice->CreateCommittedResource(
+		&CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT),
+		D3D12_HEAP_FLAG_NONE,
+		&texDesc,
+		D3D12_RESOURCE_STATE_COMMON,
+		&clearValue,
+		IID_PPV_ARGS(&mOffScreenRenderTarget)));
+
+	D3D12_DESCRIPTOR_HEAP_DESC rtvHeapDesc;
+	rtvHeapDesc.NumDescriptors = 1;
+	rtvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
+	rtvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
+	rtvHeapDesc.NodeMask = 0;
+
+	ThrowIfFailed(md3dDevice->CreateDescriptorHeap(&rtvHeapDesc, IID_PPV_ARGS(&mOffScreenRtvDescriptorHeap)));
+
+	// update off screen rtv
+	D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = mOffScreenRtvDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
+	md3dDevice->CreateRenderTargetView(mOffScreenRenderTarget.Get(), nullptr, rtvHandle);
+	mOffScreenRtvCpuHandle = rtvHandle;
+
+	// update the srv heap and descriptors again
+	UINT srvCount = 4;
+	D3D12_DESCRIPTOR_HEAP_DESC srvHeapDesc = {};
+	srvHeapDesc.NumDescriptors = srvCount + mWaves->DescriptorCount() + mSobelOp->DescriptorCount();
+	srvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+	srvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+	ThrowIfFailed(md3dDevice->CreateDescriptorHeap(&srvHeapDesc, IID_PPV_ARGS(&mSrvDescriptorHeap)));
+
+	// Fill out the heap with actual descriptors.  
+	CD3DX12_CPU_DESCRIPTOR_HANDLE hDescriptor(mSrvDescriptorHeap->GetCPUDescriptorHandleForHeapStart());
+
+	// NOTE: need to load textures, otherwise the mTexture's resources are empty ptr
+	LoadTextures();
+
+	D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+	srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+	srvDesc.Format = mTextures["grassTex"]->Resource->GetDesc().Format;
+	srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+	srvDesc.Texture2D.MostDetailedMip = 0;
+	srvDesc.Texture2D.MipLevels = -1;
+	md3dDevice->CreateShaderResourceView(mTextures["grassTex"]->Resource.Get(), &srvDesc, hDescriptor);
+
+	hDescriptor.Offset(1, mCbvSrvDescriptorSize);
+	srvDesc.Format = mTextures["waterTex"]->Resource->GetDesc().Format;
+	md3dDevice->CreateShaderResourceView(mTextures["waterTex"]->Resource.Get(), &srvDesc, hDescriptor);
+
+	hDescriptor.Offset(1, mCbvSrvDescriptorSize);
+	srvDesc.Format = mTextures["fenceTex"]->Resource->GetDesc().Format;
+	md3dDevice->CreateShaderResourceView(mTextures["fenceTex"]->Resource.Get(), &srvDesc, hDescriptor);
+
+	// next descriptor for off screen srv
+	hDescriptor.Offset(1, mCbvSrvDescriptorSize);
+	srvDesc.Format = mOffScreenRenderTarget->GetDesc().Format;
+	md3dDevice->CreateShaderResourceView(mOffScreenRenderTarget.Get(), &srvDesc, hDescriptor);
+	mOffScreenSrvCpuHandle = hDescriptor;
+
+	CD3DX12_GPU_DESCRIPTOR_HANDLE hGpuDescriptor(mSrvDescriptorHeap->GetGPUDescriptorHandleForHeapStart());
+	hGpuDescriptor.Offset(3, mCbvSrvDescriptorSize);
+	mOffScreenSrvGpuHandle = hGpuDescriptor;
+	
+	if (mWaves) {
+		mWaves->BuildDescriptors(
+			CD3DX12_CPU_DESCRIPTOR_HANDLE(mSrvDescriptorHeap->GetCPUDescriptorHandleForHeapStart(), srvCount, mCbvSrvDescriptorSize),
+			CD3DX12_GPU_DESCRIPTOR_HANDLE(mSrvDescriptorHeap->GetGPUDescriptorHandleForHeapStart(), srvCount, mCbvSrvDescriptorSize),
+			mCbvSrvDescriptorSize);
+	}
+
+	if (mSobelOp) {
+		mSobelOp->OnResize(mClientWidth, mClientHeight);
+		mSobelOp->BuildDescriptors(
+			CD3DX12_CPU_DESCRIPTOR_HANDLE(mSrvDescriptorHeap->GetCPUDescriptorHandleForHeapStart(),
+				srvCount + mWaves->DescriptorCount(), mCbvSrvDescriptorSize),
+			CD3DX12_GPU_DESCRIPTOR_HANDLE(mSrvDescriptorHeap->GetGPUDescriptorHandleForHeapStart(),
+				srvCount + mWaves->DescriptorCount(), mCbvSrvDescriptorSize),
+			mCbvSrvDescriptorSize);
+	}
+
+	// NOTE: close command list here to include the changes toward off screen render target
+	ThrowIfFailed(mCommandList->Close());
+	ID3D12CommandList* cmdsLists[] = { mCommandList.Get() };
+	mCommandQueue->ExecuteCommandLists(_countof(cmdsLists), cmdsLists);
+
+	// Wait until resize is complete.
+	FlushCommandQueue();
+
+	// Update the viewport transform to cover the client area.
+	mScreenViewport.TopLeftX = 0;
+	mScreenViewport.TopLeftY = 0;
+	mScreenViewport.Width = static_cast<float>(mClientWidth);
+	mScreenViewport.Height = static_cast<float>(mClientHeight);
+	mScreenViewport.MinDepth = 0.0f;
+	mScreenViewport.MaxDepth = 1.0f;
+
+	mScissorRect = { 0, 0, mClientWidth, mClientHeight };
+
+	// The window resized, so update the aspect ratio and recompute the projection matrix.
+	XMMATRIX P = XMMatrixPerspectiveFovLH(0.25f * MathHelper::Pi, AspectRatio(), 1.0f, 1000.0f);
+	XMStoreFloat4x4(&mProj, P);
 }

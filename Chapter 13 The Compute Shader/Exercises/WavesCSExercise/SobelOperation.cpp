@@ -55,7 +55,7 @@ void SobelOperation::OnResize(UINT newWidth, UINT newHeight)
 		BuildResources();
 
 		// New resource, so we need new descriptors to that resource.
-		BuildDescriptors();
+		//BuildDescriptors();
 	}
 }
 
@@ -118,6 +118,10 @@ void SobelOperation::BuildDescriptors()
 
 void SobelOperation::BuildResources()
 {
+	// release resources for resizing
+	mInput.Reset();
+	mOutput.Reset();
+
 	D3D12_RESOURCE_DESC texDesc;
 	ZeroMemory(&texDesc, sizeof(D3D12_RESOURCE_DESC));
 	texDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
