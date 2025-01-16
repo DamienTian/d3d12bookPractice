@@ -1,0 +1,1 @@
+E:\DirectX12\d3d12bookPractice\Chapter 14 The Tessellation Stages\Exercises\BezierPatchExercise\x64\Debug\BezierPatch.exe
