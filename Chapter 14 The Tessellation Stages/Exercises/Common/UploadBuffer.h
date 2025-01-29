@@ -21,13 +21,21 @@ public:
         if(isConstantBuffer)
             mElementByteSize = d3dUtil::CalcConstantBufferByteSize(sizeof(T));
 
-        ThrowIfFailed(device->CreateCommittedResource(
+        HRESULT hr = device->CreateCommittedResource(
             &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
             D3D12_HEAP_FLAG_NONE,
             &CD3DX12_RESOURCE_DESC::Buffer(mElementByteSize*elementCount),
 			D3D12_RESOURCE_STATE_GENERIC_READ,
             nullptr,
-            IID_PPV_ARGS(&mUploadBuffer)));
+            IID_PPV_ARGS(&mUploadBuffer));
+        
+        if (FAILED(hr)) {
+            std::wstring text = L"CreateCommittedResource failed with HRESULT: ";
+            text += hr;
+            text += L"\n";
+
+            OutputDebugString(text.c_str());
+        }
 
         ThrowIfFailed(mUploadBuffer->Map(0, nullptr, reinterpret_cast<void**>(&mMappedData)));
 

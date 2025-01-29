@@ -8,6 +8,10 @@
 #include "../Common/GeometryGenerator.h"
 #include "FrameResource.h"
 
+#ifndef EX1
+#define EX1
+#endif
+
 using Microsoft::WRL::ComPtr;
 using namespace DirectX;
 using namespace DirectX::PackedVector;
@@ -588,10 +592,18 @@ void BasicTessellationApp::BuildDescriptorHeaps()
 
 void BasicTessellationApp::BuildShadersAndInputLayout()
 {
+#ifdef EX1
+	mShaders["tessVS"] = d3dUtil::CompileShader(L"Shaders\\TessellationWithTriPatch.hlsl", nullptr, "VS", "vs_5_0");
+	mShaders["tessHS"] = d3dUtil::CompileShader(L"Shaders\\TessellationWithTriPatch.hlsl", nullptr, "HS", "hs_5_0");
+	mShaders["tessDS"] = d3dUtil::CompileShader(L"Shaders\\TessellationWithTriPatch.hlsl", nullptr, "DS", "ds_5_0");
+	mShaders["tessPS"] = d3dUtil::CompileShader(L"Shaders\\TessellationWithTriPatch.hlsl", nullptr, "PS", "ps_5_0");
+#else
 	mShaders["tessVS"] = d3dUtil::CompileShader(L"Shaders\\Tessellation.hlsl", nullptr, "VS", "vs_5_0");
 	mShaders["tessHS"] = d3dUtil::CompileShader(L"Shaders\\Tessellation.hlsl", nullptr, "HS", "hs_5_0");
 	mShaders["tessDS"] = d3dUtil::CompileShader(L"Shaders\\Tessellation.hlsl", nullptr, "DS", "ds_5_0");
 	mShaders["tessPS"] = d3dUtil::CompileShader(L"Shaders\\Tessellation.hlsl", nullptr, "PS", "ps_5_0");
+#endif // EX1
+
 	
     mInputLayout =
     {
@@ -603,13 +615,17 @@ void BasicTessellationApp::BuildQuadPatchGeometry()
 {
     std::array<XMFLOAT3,4> vertices =
 	{
-		XMFLOAT3(-10.0f, 0.0f, +10.0f),
-		XMFLOAT3(+10.0f, 0.0f, +10.0f),
-		XMFLOAT3(-10.0f, 0.0f, -10.0f),
-		XMFLOAT3(+10.0f, 0.0f, -10.0f)
+		XMFLOAT3(-10.0f, 0.0f, +10.0f), // 0
+		XMFLOAT3(+10.0f, 0.0f, +10.0f), // 1
+		XMFLOAT3(-10.0f, 0.0f, -10.0f), // 2
+		XMFLOAT3(+10.0f, 0.0f, -10.0f)	// 3
 	};
 
+#if defined(EX1)
+	std::array<std::int16_t, 6> indices = { 0, 1, 3, 3, 2, 0 };
+#else
 	std::array<std::int16_t, 4> indices = { 0, 1, 2, 3 };
+#endif
 
     const UINT vbByteSize = (UINT)vertices.size() * sizeof(Vertex);
     const UINT ibByteSize = (UINT)indices.size() * sizeof(std::uint16_t);
@@ -634,14 +650,31 @@ void BasicTessellationApp::BuildQuadPatchGeometry()
 	geo->IndexFormat = DXGI_FORMAT_R16_UINT;
 	geo->IndexBufferByteSize = ibByteSize;
 
+#if defined(EX1)
+	SubmeshGeometry triSubmesh1;
+	triSubmesh1.IndexCount = 3;
+	triSubmesh1.StartIndexLocation = 0;
+	triSubmesh1.BaseVertexLocation = 0;
+
+	geo->DrawArgs["tripatch1"] = triSubmesh1;
+
+	SubmeshGeometry triSubmesh2;
+	triSubmesh2.IndexCount = 3;
+	triSubmesh2.StartIndexLocation = 3;
+	triSubmesh2.BaseVertexLocation = 0;
+
+	geo->DrawArgs["tripatch2"] = triSubmesh2;
+#else
 	SubmeshGeometry quadSubmesh;
 	quadSubmesh.IndexCount = 4;
 	quadSubmesh.StartIndexLocation = 0;
 	quadSubmesh.BaseVertexLocation = 0;
 
 	geo->DrawArgs["quadpatch"] = quadSubmesh;
+#endif
 
 	mGeometries[geo->Name] = std::move(geo);
+
 }
 
 void BasicTessellationApp::BuildPSOs()
@@ -712,6 +745,37 @@ void BasicTessellationApp::BuildMaterials()
 
 void BasicTessellationApp::BuildRenderItems()
 {
+	
+#if defined(EX1)
+	auto triPatchRitem1 = std::make_unique<RenderItem>();
+	triPatchRitem1->World = MathHelper::Identity4x4();
+	triPatchRitem1->TexTransform = MathHelper::Identity4x4();
+	triPatchRitem1->ObjCBIndex = 0;
+	triPatchRitem1->Mat = mMaterials["whiteMat"].get();
+	triPatchRitem1->Geo = mGeometries["quadpatchGeo"].get();
+	triPatchRitem1->PrimitiveType = D3D_PRIMITIVE_TOPOLOGY_3_CONTROL_POINT_PATCHLIST;
+
+	triPatchRitem1->IndexCount = triPatchRitem1->Geo->DrawArgs["tripatch1"].IndexCount;
+	triPatchRitem1->StartIndexLocation = triPatchRitem1->Geo->DrawArgs["tripatch1"].StartIndexLocation;
+	triPatchRitem1->BaseVertexLocation = triPatchRitem1->Geo->DrawArgs["tripatch1"].BaseVertexLocation;
+	mRitemLayer[(int)RenderLayer::Opaque].push_back(triPatchRitem1.get());
+
+	auto triPatchRitem2 = std::make_unique<RenderItem>();
+	triPatchRitem2->World = MathHelper::Identity4x4();
+	triPatchRitem2->TexTransform = MathHelper::Identity4x4();
+	triPatchRitem2->ObjCBIndex = 0;
+	triPatchRitem2->Mat = mMaterials["whiteMat"].get();
+	triPatchRitem2->Geo = mGeometries["quadpatchGeo"].get();
+	triPatchRitem2->PrimitiveType = D3D_PRIMITIVE_TOPOLOGY_3_CONTROL_POINT_PATCHLIST;
+
+	triPatchRitem2->IndexCount = triPatchRitem2->Geo->DrawArgs["tripatch2"].IndexCount;
+	triPatchRitem2->StartIndexLocation = triPatchRitem2->Geo->DrawArgs["tripatch2"].StartIndexLocation;
+	triPatchRitem2->BaseVertexLocation = triPatchRitem2->Geo->DrawArgs["tripatch2"].BaseVertexLocation;
+	mRitemLayer[(int)RenderLayer::Opaque].push_back(triPatchRitem2.get());
+
+	mAllRitems.push_back(std::move(triPatchRitem1));
+	mAllRitems.push_back(std::move(triPatchRitem2));
+#else
 	auto quadPatchRitem = std::make_unique<RenderItem>();
 	quadPatchRitem->World = MathHelper::Identity4x4();
 	quadPatchRitem->TexTransform = MathHelper::Identity4x4();
@@ -723,8 +787,9 @@ void BasicTessellationApp::BuildRenderItems()
 	quadPatchRitem->StartIndexLocation = quadPatchRitem->Geo->DrawArgs["quadpatch"].StartIndexLocation;
 	quadPatchRitem->BaseVertexLocation = quadPatchRitem->Geo->DrawArgs["quadpatch"].BaseVertexLocation;
 	mRitemLayer[(int)RenderLayer::Opaque].push_back(quadPatchRitem.get());
-	
+
 	mAllRitems.push_back(std::move(quadPatchRitem));
+#endif
 }
 
 void BasicTessellationApp::DrawRenderItems(ID3D12GraphicsCommandList* cmdList, const std::vector<RenderItem*>& ritems)
