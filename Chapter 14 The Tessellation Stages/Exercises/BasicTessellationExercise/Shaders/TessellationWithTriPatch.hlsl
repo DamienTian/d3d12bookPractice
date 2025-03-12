@@ -2,7 +2,7 @@
 // Tessellation.hlsl by Frank Luna (C) 2015 All Rights Reserved.
 //***************************************************************************************
 
-// QUESTION: The input is two triangle patches, and I tried to form a quad with them, but they are always disjoint from each other
+// EX1 QUESTION: The input is two triangle patches, and I tried to form a quad with them, but they are always disjoint from each other
 
 // Include structures and functions for lighting.
 #include "LightingUtil.hlsl"
@@ -156,7 +156,7 @@ DomainOut DS(PatchTess patchTess,
 	// Bilinear interpolation.
     float3 v1 = lerp(tri[0].PosL, tri[1].PosL, uvw.x);
     float3 v2 = lerp(tri[1].PosL, tri[2].PosL, uvw.y);
-    float3 v3 = lerp(tri[2].PosL, tri[0].PosL, 1 - uvw.x - uvw.y);
+    float3 v3 = lerp(tri[2].PosL, tri[0].PosL, uvw.z);
     float3 p = v1 + v2 + v3;
 	
 	// Displacement mapping

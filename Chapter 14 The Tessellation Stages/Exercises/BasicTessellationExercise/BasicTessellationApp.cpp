@@ -8,9 +8,9 @@
 #include "../Common/GeometryGenerator.h"
 #include "FrameResource.h"
 
-#ifndef EX1
-#define EX1
-#endif
+//#define REGULAR // shader without tessellation
+//#define EX1
+#define EX2
 
 using Microsoft::WRL::ComPtr;
 using namespace DirectX;
@@ -592,11 +592,23 @@ void BasicTessellationApp::BuildDescriptorHeaps()
 
 void BasicTessellationApp::BuildShadersAndInputLayout()
 {
-#ifdef EX1
-	mShaders["tessVS"] = d3dUtil::CompileShader(L"Shaders\\TessellationWithTriPatch.hlsl", nullptr, "VS", "vs_5_0");
-	mShaders["tessHS"] = d3dUtil::CompileShader(L"Shaders\\TessellationWithTriPatch.hlsl", nullptr, "HS", "hs_5_0");
-	mShaders["tessDS"] = d3dUtil::CompileShader(L"Shaders\\TessellationWithTriPatch.hlsl", nullptr, "DS", "ds_5_0");
-	mShaders["tessPS"] = d3dUtil::CompileShader(L"Shaders\\TessellationWithTriPatch.hlsl", nullptr, "PS", "ps_5_0");
+#ifdef REGULAR
+	mShaders["regularVS"] = d3dUtil::CompileShader(L"Shaders\\Regular.hlsl", nullptr, "VS", "vs_5_0");
+	mShaders["regularPS"] = d3dUtil::CompileShader(L"Shaders\\Regular.hlsl", nullptr, "PS", "vs_5_0");
+#elif defined(EX1) || defined(EX2)
+	//mShaders["tessVS"] = d3dUtil::CompileShader(L"Shaders\\TessellationWithTriPatch.hlsl", nullptr, "VS", "vs_5_0");
+	//mShaders["tessHS"] = d3dUtil::CompileShader(L"Shaders\\TessellationWithTriPatch.hlsl", nullptr, "HS", "hs_5_0");
+	//mShaders["tessDS"] = d3dUtil::CompileShader(L"Shaders\\TessellationWithTriPatch.hlsl", nullptr, "DS", "ds_5_0");
+	//mShaders["tessPS"] = d3dUtil::CompileShader(L"Shaders\\TessellationWithTriPatch.hlsl", nullptr, "PS", "ps_5_0");
+
+	std::wstring includeShadersDir = std::filesystem::current_path().append("Shaders");
+	OutputDebugString(includeShadersDir.c_str());
+	OutputDebugString(L"\n");
+
+	mShaders["tessVS"] = d3dUtil::DxcCompileShader(L"TessellationWithTriPatch.hlsl", nullptr, 0, L"VS", L"vs_6_0", includeShadersDir);
+	mShaders["tessHS"] = d3dUtil::DxcCompileShader(L"TessellationWithTriPatch.hlsl", nullptr, 0, L"HS", L"hs_6_0", includeShadersDir);
+	mShaders["tessDS"] = d3dUtil::DxcCompileShader(L"TessellationWithTriPatch.hlsl", nullptr, 0, L"DS", L"ds_6_0", includeShadersDir);
+	mShaders["tessPS"] = d3dUtil::DxcCompileShader(L"TessellationWithTriPatch.hlsl", nullptr, 0, L"PS", L"ps_6_0", includeShadersDir);
 #else
 	mShaders["tessVS"] = d3dUtil::CompileShader(L"Shaders\\Tessellation.hlsl", nullptr, "VS", "vs_5_0");
 	mShaders["tessHS"] = d3dUtil::CompileShader(L"Shaders\\Tessellation.hlsl", nullptr, "HS", "hs_5_0");
@@ -613,18 +625,27 @@ void BasicTessellationApp::BuildShadersAndInputLayout()
 
 void BasicTessellationApp::BuildQuadPatchGeometry()
 {
-    std::array<XMFLOAT3,4> vertices =
+
+#if defined(EX2)
+	GeometryGenerator geoGen;
+
+	GeometryGenerator::MeshData icosahedron = geoGen.CreateGeosphere(1.0f, 0);
+
+	const auto vertices = icosahedron.Vertices;
+	const auto indices = icosahedron.GetIndices16();
+#else
+	std::array<XMFLOAT3, 4> vertices =
 	{
 		XMFLOAT3(-10.0f, 0.0f, +10.0f), // 0
 		XMFLOAT3(+10.0f, 0.0f, +10.0f), // 1
 		XMFLOAT3(-10.0f, 0.0f, -10.0f), // 2
 		XMFLOAT3(+10.0f, 0.0f, -10.0f)	// 3
 	};
-
 #if defined(EX1)
 	std::array<std::int16_t, 6> indices = { 0, 1, 3, 3, 2, 0 };
 #else
 	std::array<std::int16_t, 4> indices = { 0, 1, 2, 3 };
+#endif
 #endif
 
     const UINT vbByteSize = (UINT)vertices.size() * sizeof(Vertex);
@@ -664,6 +685,13 @@ void BasicTessellationApp::BuildQuadPatchGeometry()
 	triSubmesh2.BaseVertexLocation = 0;
 
 	geo->DrawArgs["tripatch2"] = triSubmesh2;
+#elif defined(EX2)
+	SubmeshGeometry quadSubmesh;
+	quadSubmesh.IndexCount = indices.size();
+	quadSubmesh.StartIndexLocation = 0;
+	quadSubmesh.BaseVertexLocation = 0;
+
+	geo->DrawArgs["quadpatch"] = quadSubmesh;
 #else
 	SubmeshGeometry quadSubmesh;
 	quadSubmesh.IndexCount = 4;

@@ -1,5 +1,7 @@
 
 #include "d3dUtil.h"
+#include <atlbase.h>
+#include <codecvt>
 #include <comdef.h>
 #include <fstream>
 
@@ -114,6 +116,161 @@ ComPtr<ID3DBlob> d3dUtil::CompileShader(
 	ThrowIfFailed(hr);
 
 	return byteCode;
+}
+
+ComPtr<ID3DBlob> d3dUtil::DxcCompileShader(const std::wstring& filename, const D3D_SHADER_MACRO* defines, const UINT32 definesCount, const std::wstring& entrypoint, const std::wstring& target, const std::wstring& shaderIncludePath)
+{
+    // ref: 
+    // - https://simoncoenen.com/blog/programming/graphics/DxcCompiling
+    // - https://posts.tanki.ninja/2019/07/11/Using-DXC-In-Practice/
+    // - https://zhuanlan.zhihu.com/p/719575300
+ 
+    ComPtr<IDxcUtils> pUtils;
+    DxcCreateInstance(CLSID_DxcUtils, IID_PPV_ARGS(pUtils.GetAddressOf()));
+    ComPtr<IDxcBlobEncoding> pSource;
+    auto fullFileAddress = shaderIncludePath + L"\\" + filename;
+    pUtils->LoadFile(fullFileAddress.c_str(), NULL, pSource.GetAddressOf());
+
+    // Include 
+    ComPtr<IDxcIncludeHandler> pIncludeHandler;
+    pUtils->CreateDefaultIncludeHandler(pIncludeHandler.GetAddressOf());
+
+    // Build Argument
+    std::vector<LPCWSTR> selfBuildarguments;
+    DxcGenerateArgements(selfBuildarguments, defines, definesCount, shaderIncludePath);
+
+    ComPtr<IDxcCompilerArgs> args;
+    pUtils->BuildArguments(
+        filename.c_str(), entrypoint.c_str(), target.c_str(),
+        selfBuildarguments.data(), selfBuildarguments.size(), nullptr, 0, args.GetAddressOf()
+    );
+
+    // print args to check
+    auto argsP = args.Get();
+    for (int i = 0; i < argsP->GetCount(); ++i) {
+        OutputDebugString(argsP->GetArguments()[i]);
+        OutputDebugString(L" ");
+    }
+    OutputDebugString(L"\n");
+
+    ComPtr<IDxcCompiler3> dxcCompiler;
+    HRESULT hr = DxcCreateInstance(CLSID_DxcCompiler, IID_PPV_ARGS(dxcCompiler.GetAddressOf()));
+    ThrowIfFailed(hr);
+
+    DxcBuffer sourceBuffer;
+    sourceBuffer.Ptr = pSource->GetBufferPointer();
+    sourceBuffer.Size = pSource->GetBufferSize();
+    sourceBuffer.Encoding = 0;
+
+    ComPtr<IDxcBlob> pDxilBlob;
+
+    // compile & return & msg handling:
+    //  version 1:
+    // -   -   -   -   -   -   -   -   -   -   -   -   -   -   -   -   -   -   -   -   -   -   
+    //ComPtr<IDxcOperationResult> pOperationResult;
+    //hr = dxcCompiler->Compile(
+    //    &sourceBuffer, args.Get()->GetArguments(), args.Get()->GetCount(), 
+    //    pIncludeHandler.Get(), IID_PPV_ARGS(pOperationResult.GetAddressOf())
+    //);
+
+    //if (SUCCEEDED(hr)) {
+    //    pOperationResult->GetResult(pDxilBlob.GetAddressOf());
+    //}
+    //else {
+    //    ID3DBlob** ppErrorMsgs;
+    //    pOperationResult->GetErrorBuffer((IDxcBlobEncoding**)ppErrorMsgs);
+    //    LPCWSTR errorMsg = static_cast<LPCWSTR>((*ppErrorMsgs)->GetBufferPointer());
+    //    OutputDebugString(errorMsg);
+    //}
+    // 
+    // 
+    // ComPtr<ID3DBlob> pOutput = reinterpret_cast<ID3DBlob*>(pDxilBlob.Get());
+    // return pOutput;
+    // -   -   -   -   -   -   -   -   -   -   -   -   -   -   -   -   -   -   -   -   -   -   
+
+    //  version 2:
+    // -   -   -   -   -   -   -   -   -   -   -   -   -   -   -   -   -   -   -   -   -   -   
+    ComPtr<IDxcResult> pCompileResult;
+    hr = dxcCompiler->Compile(
+        &sourceBuffer, args.Get()->GetArguments(), args.Get()->GetCount(),
+        pIncludeHandler.Get(), IID_PPV_ARGS(pCompileResult.GetAddressOf())
+    );
+
+    ComPtr<IDxcBlobUtf8> pErrors;
+    pCompileResult->GetOutput(DXC_OUT_ERRORS, IID_PPV_ARGS(pErrors.GetAddressOf()), nullptr);
+    if (pErrors && pErrors->GetStringLength() > 0)
+    {
+        LPCSTR ansiStr = static_cast<LPCSTR>(pErrors->GetBufferPointer());
+        int wideSize = MultiByteToWideChar(CP_ACP, 0, ansiStr, -1, nullptr, 0);
+        std::wstring wideStr(wideSize, L'\0');
+        MultiByteToWideChar(CP_ACP, 0, ansiStr, -1, &wideStr[0], wideSize);
+        OutputDebugString(wideStr.c_str());
+        OutputDebugString(L"\n");
+        ThrowIfFailed(hr);
+    }
+
+    pCompileResult->GetOutput(DXC_OUT_OBJECT, IID_PPV_ARGS(pDxilBlob.GetAddressOf()), nullptr);
+    return reinterpret_cast<ID3DBlob*>(pDxilBlob.Get());
+    // -   -   -   -   -   -   -   -   -   -   -   -   -   -   -   -   -   -   -   -   -   -   
+}
+
+void d3dUtil::DxcGenerateArgements(std::vector<LPCWSTR>& arguments, const D3D_SHADER_MACRO* defines, const UINT32 definesCount, const std::wstring& shaderIncludePath)
+{
+
+    // -I for includes
+    arguments.push_back(L"-I");
+    arguments.push_back(shaderIncludePath.c_str());
+    //arguments.push_back(L" ");
+
+    arguments.push_back(L"-Qstrip_debug");
+    arguments.push_back(L"-Qstrip_reflect");
+
+    arguments.push_back(DXC_ARG_WARNINGS_ARE_ERRORS); //-WX
+    arguments.push_back(DXC_ARG_DEBUG); //-Zi
+
+
+    if (defines) {
+        for (size_t i = 0; defines[i].Name != NULL; ++i)
+        {
+            arguments.push_back(L"-D");
+            auto d = (LPCWSTR)defines[i].Name;
+            arguments.push_back(d);
+            //arguments.push_back(L" ");
+        }
+    }
+
+    // log output
+    //LPCWSTR* pArgs = arguments.data();
+    //for (size_t i = 0; i < arguments.size(); ++i) {
+    //    OutputDebugString(pArgs[i]);
+    //    OutputDebugString(L" ");
+    //}
+    //OutputDebugString(L"\n");
+}
+
+const DxcDefine* d3dUtil::DxcGenerateDefines(const D3D_SHADER_MACRO* defines, const UINT32 definesCount)
+{
+    if (!defines && definesCount == 0) {
+        return nullptr;
+    }
+    assert((!defines && definesCount != 0) || (defines && definesCount == 0));
+
+    auto result = std::make_unique<DxcDefine[]>(definesCount); // ¶¯Ì¬·ÖÅäÄÚ´æ
+
+    for (int i = 0; i < definesCount; ++i) {
+        // TODO: fill the result
+        LPCWSTR name = (LPCWSTR)defines[i].Name;
+        result[i].Name = name;
+        LPCWSTR value = (LPCWSTR)defines[i].Definition;
+        result[i].Value = value;
+    }
+
+    return result.get();
+}
+
+const LPCWSTR d3dUtil::ConvertStdString(const std::string& s)
+{
+    return std::wstring_convert<std::codecvt_utf8<wchar_t>>().from_bytes(s).c_str();
 }
 
 std::wstring DxException::ToString()const

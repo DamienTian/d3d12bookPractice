@@ -11,6 +11,7 @@
 #include <dxgi1_4.h>
 #include <d3d12.h>
 #include <D3Dcompiler.h>
+#include <dxcapi.h>
 #include <DirectXMath.h>
 #include <DirectXPackedVector.h>
 #include <DirectXColors.h>
@@ -126,6 +127,20 @@ public:
 		const D3D_SHADER_MACRO* defines,
 		const std::string& entrypoint,
 		const std::string& target);
+
+    static Microsoft::WRL::ComPtr<ID3DBlob> DxcCompileShader(
+        const std::wstring& filename,
+        const D3D_SHADER_MACRO* defines,
+        const UINT32 definesCount,
+        const std::wstring& entrypoint,
+        const std::wstring& target,
+        const std::wstring& shaderIncludePath = L""
+    );
+
+private:
+    static void DxcGenerateArgements(std::vector<LPCWSTR>& arguments, const D3D_SHADER_MACRO* defines = nullptr, const UINT32 definesCount = 0, const std::wstring& shaderIncludePath = L"");
+    static const DxcDefine* DxcGenerateDefines(const D3D_SHADER_MACRO* defines, const UINT32 definesCount);
+    static const LPCWSTR ConvertStdString(const std::string& s);
 };
 
 class DxException
