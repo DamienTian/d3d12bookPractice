@@ -605,10 +605,10 @@ void BasicTessellationApp::BuildShadersAndInputLayout()
 	OutputDebugString(includeShadersDir.c_str());
 	OutputDebugString(L"\n");
 
-	mShaders["tessVS"] = d3dUtil::DxcCompileShader(L"TessellationWithTriPatch.hlsl", nullptr, 0, L"VS", L"vs_6_0", includeShadersDir);
-	mShaders["tessHS"] = d3dUtil::DxcCompileShader(L"TessellationWithTriPatch.hlsl", nullptr, 0, L"HS", L"hs_6_0", includeShadersDir);
-	mShaders["tessDS"] = d3dUtil::DxcCompileShader(L"TessellationWithTriPatch.hlsl", nullptr, 0, L"DS", L"ds_6_0", includeShadersDir);
-	mShaders["tessPS"] = d3dUtil::DxcCompileShader(L"TessellationWithTriPatch.hlsl", nullptr, 0, L"PS", L"ps_6_0", includeShadersDir);
+	mShaders["tessVS"] = d3dUtil::DxcCompileShader(L"TessellationWithTriPatch.hlsl", nullptr, 0, L"VS", L"vs_6_5", includeShadersDir);
+	mShaders["tessHS"] = d3dUtil::DxcCompileShader(L"TessellationWithTriPatch.hlsl", nullptr, 0, L"HS", L"hs_6_5", includeShadersDir);
+	mShaders["tessDS"] = d3dUtil::DxcCompileShader(L"TessellationWithTriPatch.hlsl", nullptr, 0, L"DS", L"ds_6_5", includeShadersDir);
+	mShaders["tessPS"] = d3dUtil::DxcCompileShader(L"TessellationWithTriPatch.hlsl", nullptr, 0, L"PS", L"ps_6_5", includeShadersDir);
 #else
 	mShaders["tessVS"] = d3dUtil::CompileShader(L"Shaders\\Tessellation.hlsl", nullptr, "VS", "vs_5_0");
 	mShaders["tessHS"] = d3dUtil::CompileShader(L"Shaders\\Tessellation.hlsl", nullptr, "HS", "hs_5_0");
@@ -625,14 +625,17 @@ void BasicTessellationApp::BuildShadersAndInputLayout()
 
 void BasicTessellationApp::BuildQuadPatchGeometry()
 {
-
 #if defined(EX2)
 	GeometryGenerator geoGen;
 
 	GeometryGenerator::MeshData icosahedron = geoGen.CreateGeosphere(1.0f, 0);
 
-	const auto vertices = icosahedron.Vertices;
 	const auto indices = icosahedron.GetIndices16();
+	const size_t size = indices.size();
+	std::vector<XMFLOAT3> vertices(indices.size());
+	for (int i = 0; i < icosahedron.Vertices.size(); ++i) {
+		vertices[i] = icosahedron.Vertices[i].Position;
+	}
 #else
 	std::array<XMFLOAT3, 4> vertices =
 	{
@@ -648,7 +651,7 @@ void BasicTessellationApp::BuildQuadPatchGeometry()
 #endif
 #endif
 
-    const UINT vbByteSize = (UINT)vertices.size() * sizeof(Vertex);
+    const UINT vbByteSize = (UINT)vertices.size() * sizeof(XMFLOAT3);
     const UINT ibByteSize = (UINT)indices.size() * sizeof(std::uint16_t);
 
 	auto geo = std::make_unique<MeshGeometry>();
@@ -810,7 +813,11 @@ void BasicTessellationApp::BuildRenderItems()
 	quadPatchRitem->ObjCBIndex = 0;
 	quadPatchRitem->Mat = mMaterials["whiteMat"].get();
 	quadPatchRitem->Geo = mGeometries["quadpatchGeo"].get();
+#ifdef EX2
+	quadPatchRitem->PrimitiveType = D3D_PRIMITIVE_TOPOLOGY_3_CONTROL_POINT_PATCHLIST;
+#else
 	quadPatchRitem->PrimitiveType = D3D_PRIMITIVE_TOPOLOGY_4_CONTROL_POINT_PATCHLIST;
+#endif // EX2
 	quadPatchRitem->IndexCount = quadPatchRitem->Geo->DrawArgs["quadpatch"].IndexCount;
 	quadPatchRitem->StartIndexLocation = quadPatchRitem->Geo->DrawArgs["quadpatch"].StartIndexLocation;
 	quadPatchRitem->BaseVertexLocation = quadPatchRitem->Geo->DrawArgs["quadpatch"].BaseVertexLocation;

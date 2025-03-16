@@ -7,6 +7,9 @@
 // Include structures and functions for lighting.
 #include "LightingUtil.hlsl"
 
+//#define EX1
+#define EX2
+
 Texture2D    gDiffuseMap : register(t0);
 
 
@@ -101,9 +104,15 @@ PatchTess ConstantHS(InputPatch<VertexOut, 3> patch, uint patchID : SV_Primitive
 	// the tessellation is 0 if d >= d1 and 64 if d <= d0.  The interval
 	// [d0, d1] defines the range we tessellate in.
 	
+#ifdef EX2
+    const float d0 = 1.0f;
+    const float d1 = 15.0f;
+    float tess = 8.0f * saturate((d1 - d) / (d1 - d0));
+#else
     const float d0 = 20.0f;
     const float d1 = 100.0f;
     float tess = 64.0f * saturate((d1 - d) / (d1 - d0));
+#endif
 
 	// Uniformly tessellate the patch.
 
@@ -153,14 +162,13 @@ DomainOut DS(PatchTess patchTess,
 {
 	DomainOut dout;
 	
-	// Bilinear interpolation.
-    float3 v1 = lerp(tri[0].PosL, tri[1].PosL, uvw.x);
-    float3 v2 = lerp(tri[1].PosL, tri[2].PosL, uvw.y);
-    float3 v3 = lerp(tri[2].PosL, tri[0].PosL, uvw.z);
-    float3 p = v1 + v2 + v3;
+	// ref: https://www.reedbeta.com/blog/tess-quick-ref/
+    float3 p = tri[0].PosL * uvw.x + tri[1].PosL * uvw.y + tri[2].PosL * uvw.z;
 	
-	// Displacement mapping
+#ifdef EX1
+    // Displacement mapping
     p.y = 0.3f * (p.z * sin(p.x) + p.x * cos(p.z));
+#endif
 	
     float4 posW = mul(float4(p, 1.0f), gWorld);
     dout.PosH = mul(posW, gViewProj);
