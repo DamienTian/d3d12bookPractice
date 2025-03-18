@@ -6,6 +6,9 @@
 // Include structures and functions for lighting.
 #include "LightingUtil.hlsl"
 
+//#define EX3
+#define EX4
+
 Texture2D    gDiffuseMap : register(t0);
 
 
@@ -89,7 +92,17 @@ struct PatchTess
 
 PatchTess ConstantHS(InputPatch<VertexOut, 4> patch, uint patchID : SV_PrimitiveID)
 {
-	PatchTess pt;
+    PatchTess pt;
+#ifdef EX3
+    pt.EdgeTess[0] = 1;
+    pt.EdgeTess[1] = 2;
+    pt.EdgeTess[2] = 4;
+    pt.EdgeTess[3] = 3;
+	
+    pt.InsideTess[0] = 2;
+    pt.InsideTess[1] = 12;
+#else
+	
 	
 	float3 centerL = 0.25f*(patch[0].PosL + patch[1].PosL + patch[2].PosL + patch[3].PosL);
 	float3 centerW = mul(float4(centerL, 1.0f), gWorld).xyz;
@@ -113,7 +126,8 @@ PatchTess ConstantHS(InputPatch<VertexOut, 4> patch, uint patchID : SV_Primitive
 	
 	pt.InsideTess[0] = tess;
 	pt.InsideTess[1] = tess;
-	
+
+#endif
 	return pt;
 }
 
@@ -123,7 +137,12 @@ struct HullOut
 };
 
 [domain("quad")]
+#ifdef EX4
+//[partitioning("fractional_odd")]
+[partitioning("fractional_even")]
+#else
 [partitioning("integer")]
+#endif
 [outputtopology("triangle_cw")]
 [outputcontrolpoints(4)]
 [patchconstantfunc("ConstantHS")]
@@ -157,9 +176,11 @@ DomainOut DS(PatchTess patchTess,
 	float3 v1 = lerp(quad[0].PosL, quad[1].PosL, uv.x); 
 	float3 v2 = lerp(quad[2].PosL, quad[3].PosL, uv.x); 
 	float3 p  = lerp(v1, v2, uv.y); 
-	
+
+#ifndef EX3
 	// Displacement mapping
 	p.y = 0.3f*( p.z*sin(p.x) + p.x*cos(p.z) );
+#endif
 	
 	float4 posW = mul(float4(p, 1.0f), gWorld);
 	dout.PosH = mul(posW, gViewProj);
