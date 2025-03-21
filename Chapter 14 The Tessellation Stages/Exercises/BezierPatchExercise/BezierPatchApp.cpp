@@ -8,6 +8,8 @@
 #include "../Common/GeometryGenerator.h"
 #include "FrameResource.h"
 
+#define DXCOMPILE
+
 using Microsoft::WRL::ComPtr;
 using namespace DirectX;
 using namespace DirectX::PackedVector;
@@ -588,11 +590,19 @@ void BezierPatchApp::BuildDescriptorHeaps()
 
 void BezierPatchApp::BuildShadersAndInputLayout()
 {
+#ifdef DXCOMPILE
+	std::wstring includeShadersDir = std::filesystem::current_path().append("Shaders");
+	mShaders["tessVS"] = d3dUtil::DxcCompileShader(L"BezierTessellation.hlsl", nullptr, 0, L"VS", L"vs_6_5", includeShadersDir);
+	mShaders["tessHS"] = d3dUtil::DxcCompileShader(L"BezierTessellation.hlsl", nullptr, 0, L"HS", L"hs_6_5", includeShadersDir);
+	mShaders["tessDS"] = d3dUtil::DxcCompileShader(L"BezierTessellation.hlsl", nullptr, 0, L"DS", L"ds_6_5", includeShadersDir);
+	mShaders["tessPS"] = d3dUtil::DxcCompileShader(L"BezierTessellation.hlsl", nullptr, 0, L"PS", L"ps_6_5", includeShadersDir);
+#else
 	mShaders["tessVS"] = d3dUtil::CompileShader(L"Shaders\\BezierTessellation.hlsl", nullptr, "VS", "vs_5_0");
 	mShaders["tessHS"] = d3dUtil::CompileShader(L"Shaders\\BezierTessellation.hlsl", nullptr, "HS", "hs_5_0");
 	mShaders["tessDS"] = d3dUtil::CompileShader(L"Shaders\\BezierTessellation.hlsl", nullptr, "DS", "ds_5_0");
 	mShaders["tessPS"] = d3dUtil::CompileShader(L"Shaders\\BezierTessellation.hlsl", nullptr, "PS", "ps_5_0");
-	
+#endif
+
     mInputLayout =
     {
         { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
