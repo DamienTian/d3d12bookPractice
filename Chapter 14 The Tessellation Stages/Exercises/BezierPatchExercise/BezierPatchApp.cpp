@@ -9,6 +9,7 @@
 #include "FrameResource.h"
 
 #define DXCOMPILE
+//#define EX7
 
 using Microsoft::WRL::ComPtr;
 using namespace DirectX;
@@ -89,7 +90,7 @@ private:
     void BuildRootSignature();
 	void BuildDescriptorHeaps();
     void BuildShadersAndInputLayout();
-    void BuildQuadPatchGeometry();
+    void BuildQuadPatchGeometry(); 
     void BuildPSOs();
     void BuildFrameResources();
     void BuildMaterials();
@@ -611,7 +612,27 @@ void BezierPatchApp::BuildShadersAndInputLayout()
 
 void BezierPatchApp::BuildQuadPatchGeometry()
 {
-    std::array<XMFLOAT3,16> vertices =
+#ifdef EX7
+	std::array<XMFLOAT3, 9> vertices =
+	{
+		// Row 0
+		XMFLOAT3(-10.0f, -10.0f, +15.0f), XMFLOAT3(-5.0f,  0.0f, +15.0f), XMFLOAT3(+5.0f,  0.0f, +15.0f),
+
+		// Row 1
+		XMFLOAT3(-15.0f, 0.0f, +5.0f), XMFLOAT3(-5.0f,  0.0f, +5.0f), XMFLOAT3(+5.0f,  20.0f, +5.0f),
+
+		// Row 2
+		XMFLOAT3(-15.0f, 0.0f, -5.0f), XMFLOAT3(-5.0f,  0.0f, -5.0f), XMFLOAT3(+5.0f,  0.0f, -5.0f)
+	};
+
+	std::array<std::int16_t, 16> indices =
+	{
+		0, 1, 2,
+		3, 4, 5,
+		6, 7, 8
+	};
+#else
+	std::array<XMFLOAT3, 16> vertices =
 	{
 		// Row 0
 		XMFLOAT3(-10.0f, -10.0f, +15.0f),
@@ -638,14 +659,14 @@ void BezierPatchApp::BuildQuadPatchGeometry()
 		XMFLOAT3(+25.0f, 10.0f, -15.0f)
 	};
 
-	std::array<std::int16_t, 16> indices = 
-	{ 
+	std::array<std::int16_t, 16> indices =
+	{
 		0, 1, 2, 3,
 		4, 5, 6, 7,
-		8, 9, 10, 11, 
+		8, 9, 10, 11,
 		12, 13, 14, 15
 	};
-
+#endif // EX7
     const UINT vbByteSize = (UINT)vertices.size() * sizeof(Vertex);
     const UINT ibByteSize = (UINT)indices.size() * sizeof(std::uint16_t);
 
@@ -753,7 +774,11 @@ void BezierPatchApp::BuildRenderItems()
 	quadPatchRitem->ObjCBIndex = 0;
 	quadPatchRitem->Mat = mMaterials["whiteMat"].get();
 	quadPatchRitem->Geo = mGeometries["quadpatchGeo"].get();
+#ifdef EX7
+	quadPatchRitem->PrimitiveType = D3D11_PRIMITIVE_TOPOLOGY_9_CONTROL_POINT_PATCHLIST;
+#else
 	quadPatchRitem->PrimitiveType = D3D11_PRIMITIVE_TOPOLOGY_16_CONTROL_POINT_PATCHLIST;
+#endif //EX7
 	quadPatchRitem->IndexCount = quadPatchRitem->Geo->DrawArgs["quadpatch"].IndexCount;
 	quadPatchRitem->StartIndexLocation = quadPatchRitem->Geo->DrawArgs["quadpatch"].StartIndexLocation;
 	quadPatchRitem->BaseVertexLocation = quadPatchRitem->Geo->DrawArgs["quadpatch"].BaseVertexLocation;

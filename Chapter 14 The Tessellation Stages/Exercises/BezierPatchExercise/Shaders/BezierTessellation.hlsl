@@ -8,6 +8,9 @@
  // Include structures and functions for lighting.
 #include "LightingUtil.hlsl"
 
+//#define EX7
+#define EX8
+
 Texture2D    gDiffuseMap : register(t0);
 
 
@@ -116,7 +119,11 @@ struct HullOut
 [domain("quad")]
 [partitioning("integer")]
 [outputtopology("triangle_cw")]
+#ifdef EX7
+[outputcontrolpoints(9)]
+#else
 [outputcontrolpoints(16)]
+#endif //EX7 
 [patchconstantfunc("ConstantHS")]
 [maxtessfactor(64.0f)]
 HullOut HS(InputPatch<VertexOut, 16> p, 
@@ -133,8 +140,31 @@ HullOut HS(InputPatch<VertexOut, 16> p,
 struct DomainOut
 {
 	float4 PosH : SV_POSITION;
+#ifdef EX8
+    float3 PosW : POSITION;
+    float3 NormalW : NORMAL;
+#endif //EX8
 };
 
+#ifdef EX7
+float3 BernsteinBasis(float t)
+{
+    float invT = 1.0f - t;
+
+    return float3(invT * invT,
+                   2.0f * t * invT ,
+                   t * t);
+}
+
+float3 dBernsteinBasis(float t)
+{
+    float invT = 1.0f - t;
+
+    return float3(-2 * invT,
+                   2 - 4 * t,
+                   2 * t);
+}
+#else
 float4 BernsteinBasis(float t)
 {
     float invT = 1.0f - t;
@@ -143,6 +173,28 @@ float4 BernsteinBasis(float t)
                    3.0f * t * invT * invT,
                    3.0f * t * t * invT,
                    t * t * t );
+}
+
+float4 dBernsteinBasis(float t)
+{
+    float invT = 1.0f - t;
+
+    return float4(-3 * invT * invT,
+                   3 * invT * invT - 6 * t * invT,
+                   6 * t * invT - 3 * t * t,
+                   3 * t * t);
+}
+#endif //EX7
+
+float3 QuadraticBezierSum(const OutputPatch<HullOut, 9> bezpatch, float3 basisU, float3 basisV)
+{
+    float3 sum = float3(0.0f, 0.0f, 0.0f);
+	
+    sum = basisV.x * (basisU.x * bezpatch[0].PosL + basisU.y * bezpatch[1].PosL + basisU.z * bezpatch[2].PosL);
+    sum += basisV.y * (basisU.x * bezpatch[3].PosL + basisU.y * bezpatch[4].PosL + basisU.z * bezpatch[5].PosL);
+    sum += basisV.z * (basisU.x * bezpatch[6].PosL + basisU.y * bezpatch[7].PosL + basisU.z * bezpatch[8].PosL);
+
+    return sum;
 }
 
 float3 CubicBezierSum(const OutputPatch<HullOut, 16> bezpatch, float4 basisU, float4 basisV)
@@ -156,37 +208,76 @@ float3 CubicBezierSum(const OutputPatch<HullOut, 16> bezpatch, float4 basisU, fl
     return sum;
 }
 
-float4 dBernsteinBasis(float t)
-{
-    float invT = 1.0f - t;
 
-    return float4( -3 * invT * invT,
-                   3 * invT * invT - 6 * t * invT,
-                   6 * t * invT - 3 * t * t,
-                   3 * t * t );
-}
 
 // The domain shader is called for every vertex created by the tessellator.  
 // It is like the vertex shader after tessellation.
 [domain("quad")]
 DomainOut DS(PatchTess patchTess, 
              float2 uv : SV_DomainLocation, 
+#ifdef EX7
+             const OutputPatch<HullOut, 9> bezPatch)
+#else
              const OutputPatch<HullOut, 16> bezPatch)
+#endif //EX7
 {
 	DomainOut dout;
-	
+#ifdef EX7
+    float3 basisU = BernsteinBasis(uv.x);
+    float3 basisV = BernsteinBasis(uv.y);
+
+    float3 p = QuadraticBezierSum(bezPatch, basisU, basisV);
+
+	float4 posW = mul(float4(p, 1.0f), gWorld);
+	dout.PosH = mul(posW, gViewProj);
+#elif defined EX8
+	float4 basisU = BernsteinBasis(uv.x);
+    float4 basisV = BernsteinBasis(uv.y);
+
+    float3 p = CubicBezierSum(bezPatch, basisU, basisV);
+
+    float4 posW = mul(float4(p, 1.0f), gWorld);
+    dout.PosW = posW.xyz;
+    dout.PosH = mul(posW, gViewProj);
+    dout.NormalW = cross(dBernsteinBasis(uv.x).xyz, dBernsteinBasis(uv.y).xyz);
+#else
 	float4 basisU = BernsteinBasis(uv.x);
 	float4 basisV = BernsteinBasis(uv.y);
 
 	float3 p  = CubicBezierSum(bezPatch, basisU, basisV);
-	
+
 	float4 posW = mul(float4(p, 1.0f), gWorld);
 	dout.PosH = mul(posW, gViewProj);
-	
+#endif//EX7
 	return dout;
 }
 
+
 float4 PS(DomainOut pin) : SV_Target
 {
+#ifdef EX8
+	// Interpolating normal can unnormalize it, so renormalize it.
+    pin.NormalW = normalize(pin.NormalW);
+
+    // Vector from point being lit to eye. 
+    float3 toEyeW = normalize(gEyePosW - pin.PosW);
+
+	// Indirect lighting.
+    float4 ambient = gAmbientLight * gDiffuseAlbedo;
+
+    const float shininess = 1.0f - gRoughness;
+    Material mat = { gDiffuseAlbedo, gFresnelR0, shininess };
+    float3 shadowFactor = 1.0f;
+    float4 directLight = ComputeLighting(gLights, mat, pin.PosW,
+        pin.NormalW, toEyeW, shadowFactor);
+
+    float4 litColor = ambient + directLight;
+
+    // Common convention to take alpha from diffuse material.
+    litColor.a = gDiffuseAlbedo.a;
+
+    return litColor;
+#else
     return float4(1.0f, 1.0f, 1.0f, 1.0f);
+#endif
 }
