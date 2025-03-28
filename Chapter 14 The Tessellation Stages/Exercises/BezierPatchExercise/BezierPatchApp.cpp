@@ -10,6 +10,7 @@
 
 #define DXCOMPILE
 //#define EX7
+#define EX9
 
 using Microsoft::WRL::ComPtr;
 using namespace DirectX;
@@ -91,6 +92,7 @@ private:
 	void BuildDescriptorHeaps();
     void BuildShadersAndInputLayout();
     void BuildQuadPatchGeometry(); 
+    void BuildTriPatchGeometry(); // EX9
     void BuildPSOs();
     void BuildFrameResources();
     void BuildMaterials();
@@ -196,7 +198,11 @@ bool BezierPatchApp::Initialize()
     BuildRootSignature();
 	BuildDescriptorHeaps();
     BuildShadersAndInputLayout();
+#ifdef EX9
+	BuildTriPatchGeometry();
+#else
 	BuildQuadPatchGeometry();
+#endif
 	BuildMaterials();
     BuildRenderItems();
     BuildFrameResources();
@@ -592,11 +598,20 @@ void BezierPatchApp::BuildDescriptorHeaps()
 void BezierPatchApp::BuildShadersAndInputLayout()
 {
 #ifdef DXCOMPILE
+#ifdef EX9
+	std::wstring includeShadersDir = std::filesystem::current_path().append("Shaders");
+	mShaders["tessVS"] = d3dUtil::DxcCompileShader(L"BezierTessellationTrianglePatch.hlsl", nullptr, 0, L"VS", L"vs_6_5", includeShadersDir);
+	mShaders["tessHS"] = d3dUtil::DxcCompileShader(L"BezierTessellationTrianglePatch.hlsl", nullptr, 0, L"HS", L"hs_6_5", includeShadersDir);
+	mShaders["tessDS"] = d3dUtil::DxcCompileShader(L"BezierTessellationTrianglePatch.hlsl", nullptr, 0, L"DS", L"ds_6_5", includeShadersDir);
+	mShaders["tessPS"] = d3dUtil::DxcCompileShader(L"BezierTessellationTrianglePatch.hlsl", nullptr, 0, L"PS", L"ps_6_5", includeShadersDir);
+#else
 	std::wstring includeShadersDir = std::filesystem::current_path().append("Shaders");
 	mShaders["tessVS"] = d3dUtil::DxcCompileShader(L"BezierTessellation.hlsl", nullptr, 0, L"VS", L"vs_6_5", includeShadersDir);
 	mShaders["tessHS"] = d3dUtil::DxcCompileShader(L"BezierTessellation.hlsl", nullptr, 0, L"HS", L"hs_6_5", includeShadersDir);
 	mShaders["tessDS"] = d3dUtil::DxcCompileShader(L"BezierTessellation.hlsl", nullptr, 0, L"DS", L"ds_6_5", includeShadersDir);
 	mShaders["tessPS"] = d3dUtil::DxcCompileShader(L"BezierTessellation.hlsl", nullptr, 0, L"PS", L"ps_6_5", includeShadersDir);
+#endif // EX9
+
 #else
 	mShaders["tessVS"] = d3dUtil::CompileShader(L"Shaders\\BezierTessellation.hlsl", nullptr, "VS", "vs_5_0");
 	mShaders["tessHS"] = d3dUtil::CompileShader(L"Shaders\\BezierTessellation.hlsl", nullptr, "HS", "hs_5_0");
@@ -669,6 +684,73 @@ void BezierPatchApp::BuildQuadPatchGeometry()
 #endif // EX7
     const UINT vbByteSize = (UINT)vertices.size() * sizeof(Vertex);
     const UINT ibByteSize = (UINT)indices.size() * sizeof(std::uint16_t);
+
+	auto geo = std::make_unique<MeshGeometry>();
+	geo->Name = "quadpatchGeo";
+
+	ThrowIfFailed(D3DCreateBlob(vbByteSize, &geo->VertexBufferCPU));
+	CopyMemory(geo->VertexBufferCPU->GetBufferPointer(), vertices.data(), vbByteSize);
+
+	ThrowIfFailed(D3DCreateBlob(ibByteSize, &geo->IndexBufferCPU));
+	CopyMemory(geo->IndexBufferCPU->GetBufferPointer(), indices.data(), ibByteSize);
+
+	geo->VertexBufferGPU = d3dUtil::CreateDefaultBuffer(md3dDevice.Get(),
+		mCommandList.Get(), vertices.data(), vbByteSize, geo->VertexBufferUploader);
+
+	geo->IndexBufferGPU = d3dUtil::CreateDefaultBuffer(md3dDevice.Get(),
+		mCommandList.Get(), indices.data(), ibByteSize, geo->IndexBufferUploader);
+
+	geo->VertexByteStride = sizeof(XMFLOAT3);
+	geo->VertexBufferByteSize = vbByteSize;
+	geo->IndexFormat = DXGI_FORMAT_R16_UINT;
+	geo->IndexBufferByteSize = ibByteSize;
+
+	SubmeshGeometry quadSubmesh;
+	quadSubmesh.IndexCount = (UINT)indices.size();
+	quadSubmesh.StartIndexLocation = 0;
+	quadSubmesh.BaseVertexLocation = 0;
+
+	geo->DrawArgs["quadpatch"] = quadSubmesh;
+
+	mGeometries[geo->Name] = std::move(geo);
+}
+
+void BezierPatchApp::BuildTriPatchGeometry()
+{
+	// ref for geometry: https://plotly.com/python/v3/ipython-notebooks/bezier-triangular-patches/
+	std::array<XMFLOAT3, 10> vertices =
+	{
+		// Vertices
+		XMFLOAT3(+25.0f, +25.0f, +15.0f),	// a
+		XMFLOAT3(0.0f, +10.0f, +10.0f),		// b
+		XMFLOAT3(+50.0f, 0.0f, -5.0f),		// c
+		
+		// Control points
+		//	Edge 0 (a->b)
+		XMFLOAT3(+13.0f, +20.0f, +30.0f),
+		XMFLOAT3(+10.0f, +10.0f, +20.0f),
+
+		//	Edge 1 (b->c)
+		XMFLOAT3(+20.0f, 0.0f, +20.0f),
+		XMFLOAT3(+30.0f, -5.0f, +15.0f),
+
+		//	Edge 2 (b->c)
+		XMFLOAT3(+40.0f, +10.0f, +10.0f),
+		XMFLOAT3(+30.0f, +25.0f, +30.0f),
+		
+		// Center points
+		XMFLOAT3(+25.0f, +10.0f, +40.0f)
+
+	};
+
+	// ref for index layout: https://blog.demofox.org/2019/12/07/bezier-triangles/
+	std::array<std::int16_t, 10> indices =
+	{
+		0, 8, 3, 7, 9, 4, 2, 6, 5, 1
+	};
+
+	const UINT vbByteSize = (UINT)vertices.size() * sizeof(Vertex);
+	const UINT ibByteSize = (UINT)indices.size() * sizeof(std::uint16_t);
 
 	auto geo = std::make_unique<MeshGeometry>();
 	geo->Name = "quadpatchGeo";
@@ -776,6 +858,8 @@ void BezierPatchApp::BuildRenderItems()
 	quadPatchRitem->Geo = mGeometries["quadpatchGeo"].get();
 #ifdef EX7
 	quadPatchRitem->PrimitiveType = D3D11_PRIMITIVE_TOPOLOGY_9_CONTROL_POINT_PATCHLIST;
+#elif defined(EX9)
+	quadPatchRitem->PrimitiveType = D3D11_PRIMITIVE_TOPOLOGY_10_CONTROL_POINT_PATCHLIST;
 #else
 	quadPatchRitem->PrimitiveType = D3D11_PRIMITIVE_TOPOLOGY_16_CONTROL_POINT_PATCHLIST;
 #endif //EX7
