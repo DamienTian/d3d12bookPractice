@@ -163,17 +163,20 @@ DomainOut DS(PatchTess patchTess,
 	DomainOut dout;
 	
 	// ref: https://www.reedbeta.com/blog/tess-quick-ref/
-    float3 p = tri[0].PosL * uvw.x + tri[1].PosL * uvw.y + tri[2].PosL * uvw.z;
+	float3 p = tri[0].PosL * uvw.x + tri[1].PosL * uvw.y + tri[2].PosL * uvw.z;
 	
 #ifdef EX1
     // Displacement mapping
     p.y = 0.3f * (p.z * sin(p.x) + p.x * cos(p.z));
+#elif defined(EX2)
+	p = normalize(p);
 #endif
 	
-    float4 posW = mul(float4(p, 1.0f), gWorld);
-    dout.PosH = mul(posW, gViewProj);
+	float4 posW = mul(float4(p, 1.0f), gWorld);
+	dout.PosH = mul(posW, gViewProj);
 	
 	return dout;
+
 }
 
 float4 PS(DomainOut pin) : SV_Target
