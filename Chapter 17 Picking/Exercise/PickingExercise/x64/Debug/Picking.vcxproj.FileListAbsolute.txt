@@ -1,0 +1,1 @@
+E:\DirectX12\d3d12bookPractice\Chapter 17 Picking\Exercise\PickingExercise\x64\Debug\Picking.exe
