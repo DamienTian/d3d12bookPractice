@@ -1,0 +1,1 @@
+E:\DirectX12\d3d12bookPractice\Chapter 19 Normal Mapping\Exercises\NormalMapExercise\x64\Debug\NormalMap.exe
