@@ -10,13 +10,14 @@
 #include "FrameResource.h"
 #include "ShadowMap.h"
 
-#define EX1
+#define EX1 // include EX2
 /*
 	EX1 note:
 	The original ShadowMapApp.cpp first renders the shadow map to a texture, then uses this texture as a map.
 	However, for texture projection (i.e., projecting an entire texture onto the scene), the entire scene must 
 	first be rendered, followed by the projection part.
 */
+#define EX3
 
 using Microsoft::WRL::ComPtr;
 using namespace DirectX;
@@ -349,9 +350,7 @@ void ShadowMapApp::Draw(const GameTimer& gt)
     // The root signature knows how many descriptors are expected in the table.
     mCommandList->SetGraphicsRootDescriptorTable(4, mSrvDescriptorHeap->GetGPUDescriptorHandleForHeapStart());
 
-#ifdef EX1
     DrawSceneToShadowMap();
-#endif //!EX1
 
     mCommandList->RSSetViewports(1, &mScreenViewport);
     mCommandList->RSSetScissorRects(1, &mScissorRect);
@@ -382,7 +381,7 @@ void ShadowMapApp::Draw(const GameTimer& gt)
     mCommandList->SetPipelineState(mPSOs["opaque"].Get());
     DrawRenderItems(mCommandList.Get(), mRitemLayer[(int)RenderLayer::Opaque]);
 
-#ifdef EX1
+#ifndef EX1
 	// Debug display of shadow map.
     mCommandList->SetPipelineState(mPSOs["debug"].Get());
     DrawRenderItems(mCommandList.Get(), mRitemLayer[(int)RenderLayer::Debug]);

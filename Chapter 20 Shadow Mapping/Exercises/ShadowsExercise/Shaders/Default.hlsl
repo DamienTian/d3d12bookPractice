@@ -15,8 +15,6 @@
     #define NUM_SPOT_LIGHTS 0
 #endif
 
-#define EX1
-
 // Include common HLSL code.
 #include "Common.hlsl"
 
