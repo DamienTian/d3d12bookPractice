@@ -1,0 +1,1 @@
+E:\DirectX12\d3d12bookPractice\Chapter 18 Cube Mapping\Exercises\CubeMapExercise\x64\Debug\CubeMap.exe

@@ -2,12 +2,13 @@
 *.pdb
 *.exe
 *.vsidx
-Chapter 4 Direct3D Initialization/Init Direct3D/x64/Debug/Init Direct3D.vcxproj.FileListAbsolute.txt
-Chapter 6 Drawing in Direct3D/Box/x64/Debug/Box.vcxproj.FileListAbsolute.txt
 *.iobj
 *.ipdb
 *.wsuo
 Chapter 13 The Compute Shader/Exercises/VecAddExercise/results_ex1.txt
 *.json
 *.enc
-*.sln
+Chapter 20 Shadow Mapping/Exercises/ShadowsExercise/.vs/ShadowsExercise/copilot-chat/8a8f15ee/sessions/058a6776-81ac-43a3-8ee6-e1690e54bd83
+*.wpix
+Chapter 14 The Tessellation Stages/Exercises/BasicTessellationExercise/ex2_可渲染12面体.rdc
+*.rdc

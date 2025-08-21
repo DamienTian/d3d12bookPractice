@@ -1,0 +1,1 @@
+E:\DirectX12\d3d12bookPractice\Chapter 20 Shadow Mapping\Exercises\ShadowsExercise\x64\Debug\Shadows.exe

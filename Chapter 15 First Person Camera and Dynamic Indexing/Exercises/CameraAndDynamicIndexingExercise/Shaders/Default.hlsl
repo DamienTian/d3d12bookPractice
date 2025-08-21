@@ -18,7 +18,7 @@
 // Include structures and functions for lighting.
 #include "LightingUtil.hlsl"
 
-//#define EX3
+#define EX3
 
 struct MaterialData
 {

@@ -7,7 +7,7 @@
 #include "LightingUtil.hlsl"
 
 //#define EX3
-#define EX4
+//#define EX4
 
 Texture2D    gDiffuseMap : register(t0);
 

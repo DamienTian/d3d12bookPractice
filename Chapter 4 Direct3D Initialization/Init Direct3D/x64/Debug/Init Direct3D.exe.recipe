@@ -2,7 +2,7 @@
 <Project>
   <ProjectOutputs>
     <ProjectOutput>
-      <FullPath>E:\DirectX12\d3d12book\Chapter 4 Direct3D Initialization\Init Direct3D\x64\Debug\Init Direct3D.exe</FullPath>
+      <FullPath>E:\DirectX12\d3d12bookPractice\Chapter 4 Direct3D Initialization\Init Direct3D\x64\Debug\Init Direct3D.exe</FullPath>
     </ProjectOutput>
   </ProjectOutputs>
   <ContentFiles />

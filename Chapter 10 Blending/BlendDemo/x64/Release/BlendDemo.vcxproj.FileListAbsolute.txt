@@ -1,0 +1,1 @@
+E:\DirectX12\d3d12bookPractice\Chapter 10 Blending\BlendDemo\x64\Release\BlendDemo.exe

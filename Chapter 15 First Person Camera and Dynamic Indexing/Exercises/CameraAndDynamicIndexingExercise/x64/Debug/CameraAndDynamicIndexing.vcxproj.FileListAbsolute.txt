@@ -1,0 +1,1 @@
+E:\DirectX12\d3d12bookPractice\Chapter 15 First Person Camera and Dynamic Indexing\Exercises\CameraAndDynamicIndexingExercise\x64\Debug\CameraAndDynamicIndexingExercise.exe

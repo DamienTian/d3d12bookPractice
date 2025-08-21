@@ -9,7 +9,7 @@
 
 // REMEMBER to change the macro in shaders too
 //#define EX2 
-#define EX3
+//#define EX3
 
 #include "Common/d3dApp.h"
 #include "Common/MathHelper.h"
@@ -764,7 +764,7 @@ void ShapesApp::_BuildShapes()
     // Ex 1 comment out
     //GeometryGenerator::MeshData sphere = geoGen.CreateSphere(0.5f, 20, 20);
     // Ex 1
-    GeometryGenerator::MeshData sphere = geoGen.CreateGeosphere(0.5f, 4);
+    GeometryGenerator::MeshData sphere = geoGen.CreateGeosphere(0.5f, 0);
     GeometryGenerator::MeshData cylinder = geoGen.CreateCylinder(0.5f, 0.3f, 3.0f, 20, 20);
 
     //

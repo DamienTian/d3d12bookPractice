@@ -9,7 +9,7 @@
 #include "FrameResource.h"
 
 //#define EX1
-//#define EX2
+#define EX2
 // no #define for EX3&4, but in Tessellation.hlsl has #defines
 
 using Microsoft::WRL::ComPtr;

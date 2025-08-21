@@ -1,0 +1,1 @@
+E:\DirectX12\d3d12bookPractice\Chapter 13 The Compute Shader\Exercises\WavesCSExercise\x64\Release\WavesCS.exe
