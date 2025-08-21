@@ -1,14 +1,16 @@
-*.tlog
-*.pdb
 *.exe
-*.vsidx
 *.iobj
+*.wpix
+*.rdc
+*.tlog
+*.vsidx
+*.json
 *.ipdb
 *.wsuo
-Chapter 13 The Compute Shader/Exercises/VecAddExercise/results_ex1.txt
-*.json
+*.ipdb
 *.enc
-Chapter 20 Shadow Mapping/Exercises/ShadowsExercise/.vs/ShadowsExercise/copilot-chat/8a8f15ee/sessions/058a6776-81ac-43a3-8ee6-e1690e54bd83
-*.wpix
-Chapter 14 The Tessellation Stages/Exercises/BasicTessellationExercise/ex2_可渲染12面体.rdc
-*.rdc
+*.txt
+
+!*.vcxproj
+!*.vcxproj.filters
+!*.vcxproj.user
