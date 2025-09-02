@@ -65,9 +65,6 @@ enum class RenderLayer : int
 	Opaque = 0,
     Debug,
 	Sky,
-#ifdef EX1
-	Ex1,
-#endif // EX1
 	Count
 };
 
@@ -96,6 +93,7 @@ private:
 	void UpdateObjectCBs(const GameTimer& gt);
 	void UpdateMaterialBuffer(const GameTimer& gt);
     void UpdateShadowTransform(const GameTimer& gt);
+    void UpdatePerspectiveShadowTransform(const GameTimer& gt); // EX3
 	void UpdateMainPassCB(const GameTimer& gt);
     void UpdateShadowPassCB(const GameTimer& gt);
 
@@ -109,9 +107,6 @@ private:
     void BuildFrameResources();
     void BuildMaterials();
     void BuildRenderItems();
-#ifdef EX1
-    void BuildRenderItemsEX1(); 
-#endif// EX1
     void DrawRenderItems(ID3D12GraphicsCommandList* cmdList, const std::vector<RenderItem*>& ritems);
     void DrawSceneToShadowMap();
 
@@ -224,11 +219,16 @@ bool ShadowMapApp::Initialize()
     // Reset the command list to prep for initialization commands.
     ThrowIfFailed(mCommandList->Reset(mDirectCmdListAlloc.Get(), nullptr));
 
-	mCamera.SetPosition(0.0f, 2.0f, -15.0f);
+#if defined(EX1)|| defined(EX3)
+    mCamera.SetPosition(0.0f, 50.0f, 0.0f);
+    //mCamera.LookAt(mCamera.GetPosition3f(), DirectX::XMFLOAT3(0.0f, -1.0f, 0.0f), mCamera.GetUp3f());
+#else
+    mCamera.SetPosition(0.0f, 2.0f, -15.0f);
+#endif
  
     mShadowMap = std::make_unique<ShadowMap>(
         md3dDevice.Get(), 2048, 2048);
-
+    
 	LoadTextures();
     BuildRootSignature();
 	BuildDescriptorHeaps();
@@ -802,15 +802,6 @@ void ShadowMapApp::BuildShadersAndInputLayout()
 		NULL, NULL
 	};
 
-#ifdef EX1
-	const D3D_SHADER_MACRO EX1Defines[] =
-	{
-		"EX1", "1",
-		NULL, NULL
-	};
-	mShaders["EX1PS"] = d3dUtil::CompileShader(L"Shaders\\Shadows.hlsl", EX1Defines, "PS", "ps_5_1");
-#endif // EX1
-
 	mShaders["standardVS"] = d3dUtil::CompileShader(L"Shaders\\Default.hlsl", nullptr, "VS", "vs_5_1");
 	mShaders["opaquePS"] = d3dUtil::CompileShader(L"Shaders\\Default.hlsl", nullptr, "PS", "ps_5_1");
 
@@ -1189,16 +1180,6 @@ void ShadowMapApp::BuildPSOs()
 		mShaders["skyPS"]->GetBufferSize()
 	};
 	ThrowIfFailed(md3dDevice->CreateGraphicsPipelineState(&skyPsoDesc, IID_PPV_ARGS(&mPSOs["sky"])));
-
-#ifdef EX1
-	D3D12_GRAPHICS_PIPELINE_STATE_DESC smapAlphaTestedPsoDesc = smapPsoDesc;
-	smapAlphaTestedPsoDesc.PS = 
-	{
-		reinterpret_cast<BYTE*>(mShaders["shadowAlphaTestedPS"]->GetBufferPointer()),
-		mShaders["shadowAlphaTestedPS"]->GetBufferSize()
-	};
-	ThrowIfFailed(md3dDevice->CreateGraphicsPipelineState(&smapAlphaTestedPsoDesc, IID_PPV_ARGS(&mPSOs["ex1"])));
-#endif // DEBUG
 }
 
 void ShadowMapApp::BuildFrameResources()
@@ -1406,55 +1387,6 @@ void ShadowMapApp::BuildRenderItems()
 		mAllRitems.push_back(std::move(rightSphereRitem));
 	}
 }
-
-#ifdef EX1
-void ShadowMapApp::BuildRenderItemsEX1()
-{
-	int objCBIndex = 0;
-
-	auto boxRitem = std::make_unique<RenderItem>();
-	XMStoreFloat4x4(&boxRitem->World, XMMatrixScaling(2.0f, 1.0f, 2.0f)*XMMatrixTranslation(0.0f, 0.5f, 0.0f));
-	XMStoreFloat4x4(&boxRitem->TexTransform, XMMatrixScaling(1.0f, 0.5f, 1.0f));
-	boxRitem->ObjCBIndex = objCBIndex++;
-	boxRitem->Mat = mMaterials["bricks0"].get();
-	boxRitem->Geo = mGeometries["shapeGeo"].get();
-	boxRitem->PrimitiveType = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
-	boxRitem->IndexCount = boxRitem->Geo->DrawArgs["box"].IndexCount;
-	boxRitem->StartIndexLocation = boxRitem->Geo->DrawArgs["box"].StartIndexLocation;
-	boxRitem->BaseVertexLocation = boxRitem->Geo->DrawArgs["box"].BaseVertexLocation;
-
-	mRitemLayer[(int)RenderLayer::Opaque].push_back(boxRitem.get());
-	mAllRitems.push_back(std::move(boxRitem));
-
-	auto skullRitem = std::make_unique<RenderItem>();
-	XMStoreFloat4x4(&skullRitem->World, XMMatrixScaling(0.4f, 0.4f, 0.4f)*XMMatrixTranslation(0.0f, 1.0f, 0.0f));
-	skullRitem->TexTransform = MathHelper::Identity4x4();
-	skullRitem->ObjCBIndex = objCBIndex++;
-	skullRitem->Mat = mMaterials["skullMat"].get();
-	skullRitem->Geo = mGeometries["skullGeo"].get();
-	skullRitem->PrimitiveType = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
-	skullRitem->IndexCount = skullRitem->Geo->DrawArgs["skull"].IndexCount;
-	skullRitem->StartIndexLocation = skullRitem->Geo->DrawArgs["skull"].StartIndexLocation;
-	skullRitem->BaseVertexLocation = skullRitem->Geo->DrawArgs["skull"].BaseVertexLocation;
-
-	mRitemLayer[(int)RenderLayer::Opaque].push_back(skullRitem.get());
-	mAllRitems.push_back(std::move(skullRitem));
-
-	auto gridRitem = std::make_unique<RenderItem>();
-	gridRitem->World = MathHelper::Identity4x4();
-	XMStoreFloat4x4(&gridRitem->TexTransform, XMMatrixScaling(8.0f, 8.0f, 1.0f));
-	gridRitem->ObjCBIndex = objCBIndex++;
-	gridRitem->Mat = mMaterials["tile0"].get();
-	gridRitem->Geo = mGeometries["shapeGeo"].get();
-	gridRitem->PrimitiveType = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
-	gridRitem->IndexCount = gridRitem->Geo->DrawArgs["grid"].IndexCount;
-	gridRitem->StartIndexLocation = gridRitem->Geo->DrawArgs["grid"].StartIndexLocation;
-	gridRitem->BaseVertexLocation = gridRitem->Geo->DrawArgs["grid"].BaseVertexLocation;
-
-	mRitemLayer[(int)RenderLayer::Opaque].push_back(gridRitem.get());
-	mAllRitems.push_back(std::move(gridRitem));
-}
-#endif
 
 void ShadowMapApp::DrawRenderItems(ID3D12GraphicsCommandList* cmdList, const std::vector<RenderItem*>& ritems)
 {

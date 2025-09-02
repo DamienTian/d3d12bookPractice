@@ -15,7 +15,8 @@
     #define NUM_SPOT_LIGHTS 0
 #endif
 
-#define EX1
+//#define EX1
+#define EX3
 
 // Include structures and functions for lighting.
 #include "LightingUtil.hlsl"
@@ -33,7 +34,7 @@ struct MaterialData
 	uint     MatPad2;
 };
 
-#ifdef EX1
+#if defined(EX1) || defined(EX3)
 Texture2D gCubeMap : register(t0);
 #else
 TextureCube gCubeMap : register(t0);

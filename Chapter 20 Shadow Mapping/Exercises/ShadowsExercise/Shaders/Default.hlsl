@@ -104,7 +104,6 @@ float4 PS(VertexOut pin) : SV_Target
     float3 shadowFactor = float3(1.0f, 1.0f, 1.0f);
     shadowFactor[0] = CalcShadowFactor(pin.ShadowPosH);
 
-
     const float shininess = (1.0f - roughness) * normalMapSample.a;
     Material mat = { diffuseAlbedo, fresnelR0, shininess };
     float4 directLight = ComputeLighting(gLights, mat, pin.PosW,
@@ -112,31 +111,53 @@ float4 PS(VertexOut pin) : SV_Target
 
     float4 litColor = ambient + directLight;
 		
-#ifdef EX1
+#if defined(EX1) || defined(EX3)
 	// Only project the space that is not shadowed
 	if (shadowFactor[0] > 0.0f)
 	{
+#if defined(EX1)
 	    // Complete projection by doing division by w.
-		float4 projTex = pin.ShadowPosH;
+        float4 projTex = pin.ShadowPosH;
 		
 		// Divide by w to get prespective projection, comment out for orthographic projection.
-		projTex.xyz /= projTex.w;
+		//projTex.xyz /= projTex.w;
 
 		// Depth in NDC space.
-		float depth = projTex.z;
+        float depth = projTex.z;
 	
-		float4 c = gCubeMap.Sample(gsamLinearWrap, projTex.xy);
-		litColor.rgb = lerp(litColor.rgb, c.rgb, 0.5);
-	}
+        float4 c = gCubeMap.Sample(gsamLinearWrap, projTex.xy);
+        litColor.rgb = lerp(litColor.rgb, c.rgb, 0.7);
+#elif defined(EX3)
+		// Hard code some variables
+        float3 spotLightPos = float3(0.0f, 5.0f, 0.0f);
+        float3 spotLightDir = float3(0.0f, -1.0f, 0.0f);
+        float cosInner = cos(radians(50));
+        float cosOuter = cos(radians(75));
+		
+        float3 L = normalize(pin.PosW - spotLightPos);
+        float spotFactor = dot(normalize(spotLightDir), L);
+        float spot = saturate((spotFactor - cosOuter) / (cosInner - cosOuter));
+		
+		// Complete projection by doing division by w.
+        float4 projTex = pin.ShadowPosH;
 
-#else // EX1: This can still be on, but I skipped for simplicity
-	// Add in specular reflections.
-    float3 r = reflect(-toEyeW, bumpedNormalW);
-    float4 reflectionColor = gCubeMap.Sample(gsamLinearWrap, r);
-    float3 fresnelFactor = SchlickFresnel(fresnelR0, bumpedNormalW, r);
-    litColor.rgb += shininess * fresnelFactor * reflectionColor.rgb;
+        float4 c = gCubeMap.Sample(gsamLinearClamp, projTex.xy) * spot;
+        c *= spot;
+        //if (spotFactor < cosOuter)
+        //{
+        //    c.rgb = 0;
+        //}
+        litColor.rgb = lerp(litColor.rgb, c.rgb, 0.7);
+#endif//EX1
+    }
 #endif
 	
+	// Add in specular reflections.
+    //float3 r = reflect(-toEyeW, bumpedNormalW);
+    //float4 reflectionColor = gCubeMap.Sample(gsamLinearWrap, r);
+    //float3 fresnelFactor = SchlickFresnel(fresnelR0, bumpedNormalW, r);
+    //litColor.rgb += shininess * fresnelFactor * reflectionColor.rgb;
+
     // Common convention to take alpha from diffuse albedo.
     litColor.a = diffuseAlbedo.a;
 
