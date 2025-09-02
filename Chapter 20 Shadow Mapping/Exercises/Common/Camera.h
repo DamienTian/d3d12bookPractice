@@ -11,6 +11,8 @@
 #ifndef CAMERA_H
 #define CAMERA_H
 
+#define EX1
+
 #include "d3dUtil.h"
 
 class Camera
@@ -79,7 +81,11 @@ private:
 	DirectX::XMFLOAT3 mPosition = { 0.0f, 0.0f, 0.0f };
 	DirectX::XMFLOAT3 mRight = { 1.0f, 0.0f, 0.0f };
 	DirectX::XMFLOAT3 mUp = { 0.0f, 1.0f, 0.0f };
+#ifdef EX1
+	DirectX::XMFLOAT3 mLook = { 0.0f, -1.0f, 0.0f };
+#else
 	DirectX::XMFLOAT3 mLook = { 0.0f, 0.0f, 1.0f };
+#endif
 
 	// Cache frustum properties.
 	float mNearZ = 0.0f;
