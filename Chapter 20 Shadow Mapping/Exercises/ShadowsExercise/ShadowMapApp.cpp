@@ -10,14 +10,18 @@
 #include "FrameResource.h"
 #include "ShadowMap.h"
 
-#define EX1 // include EX2
+#ifndef EX1
+#define EX1 // include EX2, EX3
+#endif
 /*
 	EX1 note:
 	The original ShadowMapApp.cpp first renders the shadow map to a texture, then uses this texture as a map.
 	However, for texture projection (i.e., projecting an entire texture onto the scene), the entire scene must 
 	first be rendered, followed by the projection part.
 */
-#define EX3
+#ifndef EX4
+#define EX4
+#endif
 
 using Microsoft::WRL::ComPtr;
 using namespace DirectX;
@@ -93,7 +97,6 @@ private:
 	void UpdateObjectCBs(const GameTimer& gt);
 	void UpdateMaterialBuffer(const GameTimer& gt);
     void UpdateShadowTransform(const GameTimer& gt);
-    void UpdatePerspectiveShadowTransform(const GameTimer& gt); // EX3
 	void UpdateMainPassCB(const GameTimer& gt);
     void UpdateShadowPassCB(const GameTimer& gt);
 
@@ -545,7 +548,11 @@ void ShadowMapApp::UpdateShadowTransform(const GameTimer& gt)
 
     mLightNearZ = n;
     mLightFarZ = f;
+#if defined(EX4)
+    XMMATRIX lightProj = XMMatrixPerspectiveOffCenterLH(l, r, b, t, n, f);
+#else
     XMMATRIX lightProj = XMMatrixOrthographicOffCenterLH(l, r, b, t, n, f);
+#endif
 
     // Transform NDC space [-1,+1]^2 to texture space [0,1]^2
     XMMATRIX T(

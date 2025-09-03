@@ -119,13 +119,13 @@ float4 PS(VertexOut pin) : SV_Target
 	    // Complete projection by doing division by w.
         float4 projTex = pin.ShadowPosH;
 		
-		// Divide by w to get prespective projection, comment out for orthographic projection.
+		// Divide by w for prespective projection.
 		//projTex.xyz /= projTex.w;
 
 		// Depth in NDC space.
         float depth = projTex.z;
 	
-        float4 c = gCubeMap.Sample(gsamLinearWrap, projTex.xy);
+        float4 c = gCubeMap.Sample(gsamLinearClamp, projTex.xy);
         litColor.rgb = lerp(litColor.rgb, c.rgb, 0.7);
 #elif defined(EX3)
 		// Hard code some variables
@@ -153,10 +153,10 @@ float4 PS(VertexOut pin) : SV_Target
 #endif
 	
 	// Add in specular reflections.
-    //float3 r = reflect(-toEyeW, bumpedNormalW);
-    //float4 reflectionColor = gCubeMap.Sample(gsamLinearWrap, r);
-    //float3 fresnelFactor = SchlickFresnel(fresnelR0, bumpedNormalW, r);
-    //litColor.rgb += shininess * fresnelFactor * reflectionColor.rgb;
+    float3 r = reflect(-toEyeW, bumpedNormalW);
+    float4 reflectionColor = gCubeMap.Sample(gsamLinearWrap, r);
+    float3 fresnelFactor = SchlickFresnel(fresnelR0, bumpedNormalW, r);
+    litColor.rgb += shininess * fresnelFactor * reflectionColor.rgb;
 
     // Common convention to take alpha from diffuse albedo.
     litColor.a = diffuseAlbedo.a;

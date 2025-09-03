@@ -16,7 +16,8 @@
 #endif
 
 //#define EX1
-#define EX3
+//#define EX3
+#define EX4
 
 // Include structures and functions for lighting.
 #include "LightingUtil.hlsl"
