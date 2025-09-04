@@ -11,7 +11,7 @@
 #ifndef CAMERA_H
 #define CAMERA_H
 
-#define EX1
+//#define EX1 // Chapter 20 EX1
 
 #include "d3dUtil.h"
 

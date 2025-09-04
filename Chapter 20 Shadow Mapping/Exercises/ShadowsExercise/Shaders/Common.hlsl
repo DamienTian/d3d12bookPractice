@@ -125,7 +125,12 @@ float CalcShadowFactor(float4 shadowPosH)
 {
     // Complete projection by doing division by w.
     shadowPosH.xyz /= shadowPosH.w;
-
+    
+#ifdef EX4
+    shadowPosH.x = 0.5f * shadowPosH.x + 0.5f;
+    shadowPosH.y = -0.5f * shadowPosH.y + 0.5f;
+#endif
+    
     // Depth in NDC space.
     float depth = shadowPosH.z;
 

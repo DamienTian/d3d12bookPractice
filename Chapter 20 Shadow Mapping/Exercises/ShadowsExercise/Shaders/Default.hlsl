@@ -141,8 +141,11 @@ float4 PS(VertexOut pin) : SV_Target
 		// Complete projection by doing division by w.
         float4 projTex = pin.ShadowPosH;
 
-        float4 c = gCubeMap.Sample(gsamLinearClamp, projTex.xy) * spot;
+        // soft edge
+        float4 c = gCubeMap.Sample(gsamLinearClamp, projTex.xy);
         c *= spot;
+    
+        // hard edge
         //if (spotFactor < cosOuter)
         //{
         //    c.rgb = 0;

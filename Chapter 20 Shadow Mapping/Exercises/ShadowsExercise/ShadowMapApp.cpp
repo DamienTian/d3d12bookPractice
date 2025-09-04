@@ -11,13 +11,19 @@
 #include "ShadowMap.h"
 
 #ifndef EX1
-#define EX1 // include EX2, EX3
+//#define EX1 // include EX2, EX3
 #endif
 /*
-	EX1 note:
+* NOTES:
+	- EX1:
 	The original ShadowMapApp.cpp first renders the shadow map to a texture, then uses this texture as a map.
 	However, for texture projection (i.e., projecting an entire texture onto the scene), the entire scene must 
 	first be rendered, followed by the projection part.
+
+    - EX2: 
+    I think the original code already has this answered, see CD3DX12_STATIC_SAMPLER_DESC shadow
+    
+    - EX3: see PS in Default.hlsl
 */
 #ifndef EX4
 #define EX4
@@ -549,10 +555,14 @@ void ShadowMapApp::UpdateShadowTransform(const GameTimer& gt)
     mLightNearZ = n;
     mLightFarZ = f;
 #if defined(EX4)
+    // In prespective projection, the light should /w first then transit to NDC space,
+    // so this is a more proper way (although transit to NDC and then /w has no visual
+    // difference because the multiply T still perserve the depth in w)
     XMMATRIX lightProj = XMMatrixPerspectiveOffCenterLH(l, r, b, t, n, f);
+
+    XMMATRIX S = lightView * lightProj;
 #else
     XMMATRIX lightProj = XMMatrixOrthographicOffCenterLH(l, r, b, t, n, f);
-#endif
 
     // Transform NDC space [-1,+1]^2 to texture space [0,1]^2
     XMMATRIX T(
@@ -561,7 +571,10 @@ void ShadowMapApp::UpdateShadowTransform(const GameTimer& gt)
         0.0f, 0.0f, 1.0f, 0.0f,
         0.5f, 0.5f, 0.0f, 1.0f);
 
-    XMMATRIX S = lightView*lightProj*T;
+    XMMATRIX S = lightView * lightProj * T;
+#endif
+
+
     XMStoreFloat4x4(&mLightView, lightView);
     XMStoreFloat4x4(&mLightProj, lightProj);
     XMStoreFloat4x4(&mShadowTransform, S);
