@@ -26,8 +26,10 @@
     - EX3: see PS in Default.hlsl
 */
 #ifndef EX4
-#define EX4
+//#define EX4
 #endif
+
+// EX8 in shaders
 
 using Microsoft::WRL::ComPtr;
 using namespace DirectX;
@@ -1141,7 +1143,7 @@ void ShadowMapApp::BuildPSOs()
     D3D12_GRAPHICS_PIPELINE_STATE_DESC smapPsoDesc = opaquePsoDesc;
     smapPsoDesc.RasterizerState.DepthBias = 100000;
     smapPsoDesc.RasterizerState.DepthBiasClamp = 0.0f;
-    smapPsoDesc.RasterizerState.SlopeScaledDepthBias = 1.0f;
+    smapPsoDesc.RasterizerState.SlopeScaledDepthBias = 1.0f; // = 0.0f for EX9, very large value for EX10
     smapPsoDesc.pRootSignature = mRootSignature.Get();
     smapPsoDesc.VS =
     {
@@ -1518,7 +1520,7 @@ std::array<const CD3DX12_STATIC_SAMPLER_DESC, 7> ShadowMapApp::GetStaticSamplers
 
     const CD3DX12_STATIC_SAMPLER_DESC shadow(
         6, // shaderRegister
-        D3D12_FILTER_COMPARISON_MIN_MAG_LINEAR_MIP_POINT, // filter
+        D3D12_FILTER_COMPARISON_MIN_MAG_LINEAR_MIP_POINT, // filter (worked for EX8)
         D3D12_TEXTURE_ADDRESS_MODE_BORDER,  // addressU
         D3D12_TEXTURE_ADDRESS_MODE_BORDER,  // addressV
         D3D12_TEXTURE_ADDRESS_MODE_BORDER,  // addressW

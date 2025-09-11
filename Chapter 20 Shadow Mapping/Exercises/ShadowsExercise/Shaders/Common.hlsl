@@ -17,7 +17,8 @@
 
 //#define EX1
 //#define EX3
-#define EX4
+//#define EX4
+//#define EX8
 
 // Include structures and functions for lighting.
 #include "LightingUtil.hlsl"
@@ -140,6 +141,10 @@ float CalcShadowFactor(float4 shadowPosH)
     // Texel size.
     float dx = 1.0f / (float)width;
 
+#ifdef EX8
+    //return gShadowMap.SampleCmpLevelZero(gsamShadow, shadowPosH.xy, depth).r;
+    return gShadowMap.SampleCmp(gsamShadow, shadowPosH.xy, depth).r;
+#else
     float percentLit = 0.0f;
     const float2 offsets[9] =
     {
@@ -156,5 +161,8 @@ float CalcShadowFactor(float4 shadowPosH)
     }
     
     return percentLit / 9.0f;
+    
+#endif //EX8
+    
 }
 
