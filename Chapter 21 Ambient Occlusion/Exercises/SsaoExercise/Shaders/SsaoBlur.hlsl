@@ -128,6 +128,8 @@ float4 PS(VertexOut pin) : SV_Target
 		// We discard such samples from the blur.
 		//
 	
+		// EX2: Commnet the if part out, then we get regular Gaussian blur.
+		// - - -	 - - -	 - - -	 - - -	 - - -	 - - -	 - - -	 - - -	 - - -	 - - -	
 		if( dot(neighborNormal, centerNormal) >= 0.8f &&
 		    abs(neighborDepth - centerDepth) <= 0.2f )
 		{
@@ -139,6 +141,7 @@ float4 PS(VertexOut pin) : SV_Target
 		
 			totalWeight += weight;
 		}
+		// - - -	 - - -	 - - -	 - - -	 - - -	 - - -	 - - -	 - - -	 - - -	 - - -	
 	}
 
 	// Compensate for discarded samples by making total weights sum to 1.
