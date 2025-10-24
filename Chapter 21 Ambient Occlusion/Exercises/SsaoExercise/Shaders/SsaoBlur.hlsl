@@ -128,7 +128,7 @@ float4 PS(VertexOut pin) : SV_Target
 		// We discard such samples from the blur.
 		//
 	
-		// EX2: Commnet the if part out, then we get regular Gaussian blur.
+		// EX2: Commnet the if{} out (not what in the if statement), then we get regular Gaussian blur.
 		// - - -	 - - -	 - - -	 - - -	 - - -	 - - -	 - - -	 - - -	 - - -	 - - -	
 		if( dot(neighborNormal, centerNormal) >= 0.8f &&
 		    abs(neighborDepth - centerDepth) <= 0.2f )

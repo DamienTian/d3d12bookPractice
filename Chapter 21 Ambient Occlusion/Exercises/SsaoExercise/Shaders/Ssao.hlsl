@@ -183,7 +183,9 @@ float4 PS(VertexOut pin) : SV_Target
 		// 
 		
 		float distZ = p.z - r.z;
-		float dp = max(dot(n, normalize(r - p)), 0.0f);
+		float dp = max(dot(n, normalize(r - p)), 0.0f); 
+		// float dp = 1; // EX4: replace the above line to ignore the angle between n and (r-p).
+		
 
         float occlusion = dp*OcclusionFunction(distZ);
 
